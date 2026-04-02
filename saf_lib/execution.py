@@ -717,7 +717,7 @@ def plot_impact_vs_alpha_decay(results_df: pd.DataFrame) -> plt.Figure:
 
     ax.set_xlabel("Fill Rate")
     ax.set_ylabel("Arrival Cost (bps)")
-    ax.set_title("Impact vs Alpha Decay Tradeoff")
+    ax.set_title("Arrival Cost vs Fill Rate (means)")
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
     return fig
