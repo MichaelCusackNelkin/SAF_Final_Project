@@ -1,0 +1,146 @@
+---
+title: "Measuring Alpha Decay: Analysis of Order Splitting via Trade Markouts"
+date: today
+date-modified: last-modified
+author:
+  - name: John Joe
+    corresponding: true
+    email: computo@sfds.asso.fr
+    url: https://computo.sfds.asso.fr
+    orcid: 0000-0000-0000-0000
+    affiliations:
+      - name: Texas A&M University
+        department: Electrical and Computer Engineering
+        address: College Station, TX 77843, USA
+  - name: John Joe
+  - name: John Joe
+description: |
+  This document provides a template based on the quarto system for contributions to Computo. The github repository in itself provides a specific quarto extension useful for authors (and editors!).
+keywords: [template, quarto, R, Python, reproductibility]
+doi: 10.xxxx/xxx-xxx
+citation:
+  type: article-journal
+  container-title: "NeurIPS"
+  doi: "10.xxxx/xxx-xxx"
+  url: "https://github.com/computorg/computo-quarto-extension"
+  issn: "2824-7795"
+google-scholar: true
+github-user: stevengogogo
+repo: "neurips-template-enhanced"
+draft: true # set to false once the build is running
+published: false # will be set to true once accepted
+format:
+  neurips-pdf: 
+    keep-tex: true
+  neurips-html: default
+---
+
+# Abstract
+
+A fundamental hurdle in trading is the balance between market impact and alpha decay. Submitting a large order leads to significant price impact as it takes the liquidity from the Limit Order Book (LOB). On the other hand, splitting a large order into smaller chunks over seconds or minutes exposes unexecuted orders to alpha decay and price drifts. This hurdle is especially prevalent in crowded markets where thousands of algorithms are trading on similar signals.
+
+The goal of the project will be to measure the average alpha lost when forced to split orders by comparing different execution strategies. In the execution of this goal, will use post-trade markouts to evaluate the price impact and the drift over short periods of time as we follow the signal. Additionally, we will record the average cost of entering the position, the aim of which is to minimize the cost.
+
+# About this document
+
+The primary components of this project are broken up into three distinct parts:
+
+1. A [data ingestion pipeline], which will parse high frequency tick data to reconstruct top-of-book pricing and trade flows.
+2. An execution strategy simulatior, which will develop signals on which to build and execute a strategy.
+3. Statistical markout, which will compute and plot the average price changes over varying time intervals
+
+# Data Ingestion Pipeline
+
+## Data Sourcing Methodology
+
+In this project, we are using the ```MBP-10``` dataset, which contains high frequency tick data for the top 10 levels of the Limit Order Book (LOB) for a selection of stocks. The dataset includes both order book updates and trade executions, allowing us to reconstruct the market dynamics at a granular level. The data is sourced from Databento.
+
+In the project milestone, we are utilizing 2 calendar days of data for the stock AMZN. In future selections, we will augment this dataset with additional stocks and more calendar days as described in Next Steps.
+
+## Data Ingestion Pipeline
+
+To source the data, we have created a DataBento pipeline broadly using the pseudocode below:
+
+```pseudocode
+#| label: alg-feature-cleaning
+#| html-indent-size: "1.2em"
+#| html-comment-delimiter: "//"
+#| html-line-number: true
+#| html-line-number-punc: ":"
+#| html-no-end: false
+#| pdf-placement: "htb!"
+#| pdf-line-number: true
+
+\begin{algorithm}
+\caption{Feature Cleaning and Construction for MBP-10 Data}
+\begin{algorithmic}
+\Procedure{PrepareFeatureData}{$raw\_df$}
+  \State $df \gets$ copy of $raw\_df$
+
+  \Statex
+  \Statex \textbf{// Step 1: Build top-of-book price features}
+  \State $df[\texttt{mid\_price}] \gets (df[\texttt{bid\_px\_00}] + df[\texttt{ask\_px\_00}]) / 2$
+  \State $df[\texttt{spread}] \gets df[\texttt{ask\_px\_00}] - df[\texttt{bid\_px\_00}]$
+  \State $df[\texttt{spread\_bps}] \gets df[\texttt{spread}] / df[\texttt{mid\_price}] \times 10{,}000$
+
+  \Statex
+  \Statex \textbf{// Step 2: Build micro-price}
+  \State $total\_sz \gets df[\texttt{bid\_sz\_00}] + df[\texttt{ask\_sz\_00}]$
+  \For{each row in $df$}
+    \If{$total\_sz > 0$}
+      \State $df[\texttt{micro\_price}] \gets$
+      \Statex \hspace{1em} $\dfrac{df[\texttt{bid\_px\_00}] \cdot df[\texttt{ask\_sz\_00}] + df[\texttt{ask\_px\_00}] \cdot df[\texttt{bid\_sz\_00}]}{total\_sz}$
+    \Else
+      \State $df[\texttt{micro\_price}] \gets df[\texttt{mid\_price}]$
+    \EndIf
+  \EndFor
+
+  \Statex
+  \Statex \textbf{// Step 3: Infer signed trade flow from trade events}
+  \State $df[\texttt{trade\_flow}] \gets 0$
+  \For{each row in $df$}
+    \If{$action = \texttt{"T"}$ \textbf{and} $price \ge ask\_px\_00$}
+      \State classify event as buyer-initiated
+      \State $df[\texttt{trade\_flow}] \gets size$
+    \ElsIf{$action = \texttt{"T"}$ \textbf{and} $price \le bid\_px\_00$}
+      \State classify event as seller-initiated
+      \State $df[\texttt{trade\_flow}] \gets -size$
+    \Else
+      \State leave $df[\texttt{trade\_flow}]$ as $0$
+    \EndIf
+  \EndFor
+
+  \Statex
+  \Statex \textbf{// Step 4: Accumulate trade pressure through time}
+  \State $df[\texttt{cumulative\_trade\_flow}] \gets$ cumulative sum of $df[\texttt{trade\_flow}]$
+
+  \Statex
+  \Statex \textbf{// Step 5: Build top-of-book imbalance}
+  \State $bid\_ask\_sum \gets df[\texttt{bid\_sz\_00}] + df[\texttt{ask\_sz\_00}]$
+  \For{each row in $df$}
+    \If{$bid\_ask\_sum > 0$}
+      \State $df[\texttt{obi\_level0}] \gets$
+      \Statex \hspace{1em} $\dfrac{df[\texttt{bid\_sz\_00}] - df[\texttt{ask\_sz\_00}]}{bid\_ask\_sum}$
+    \Else
+      \State $df[\texttt{obi\_level0}] \gets 0$
+    \EndIf
+  \EndFor
+
+  \Statex
+  \Statex \textbf{// Step 6: Smooth recent trade pressure with a rolling window}
+  \State $rolling\_flow \gets$ rolling sum of $df[\texttt{trade\_flow}]$ over 1000 ticks
+  \State $rolling\_abs \gets$ rolling sum of $|df[\texttt{trade\_flow}]|$ over 1000 ticks
+
+  \For{each row in $df$}
+    \If{$rolling\_abs > 0$}
+      \State $df[\texttt{volume\_imbalance}] \gets rolling\_flow / rolling\_abs$
+    \Else
+      \State $df[\texttt{volume\_imbalance}] \gets \texttt{NaN}$
+    \EndIf
+  \EndFor
+
+  \State \Return $df$
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+```
