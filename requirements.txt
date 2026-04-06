@@ -1,0 +1,7 @@
+numpy
+pandas
+databento
+matplotlib
+statsmodels
+sklearn
+polars
