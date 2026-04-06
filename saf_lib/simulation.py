@@ -76,64 +76,392 @@ class L2Book:
 
         return sum(volume_weighted_fills) / order_size
 
-if __name__ == "__main__":
-    import polars as pl
-    import matplotlib.pyplot as plt
-    import statsmodels.api as sm
+class ExecutionSimulator:
+    """
+    Replay-driven execution simulator that walks a time-sorted L2 orderbook
+    DataFrame and simulates market-order fills against the book state.
 
-    df = pl.DataFrame({
-        "level": [1,2,3,4,5,6,7,8,9,10],
-        "bid_size": [150,300,200,400,500,600,250,800,1000,1200],
-        "bid_px": [149.99, 149.98, 149.95, 149.90, 149.85, 149.80, 149.78, 149.75, 149.70, 149.65],
-        "ask_px": [150.02, 150.05, 150.06, 150.09, 150.15, 150.18, 150.20, 150.22, 150.25, 150.30],
-        "ask_size": [100, 250, 400, 200, 500, 450, 700, 300, 900, 1500],
-    })
+    Parameters
+    ----------
+    df : pl.DataFrame
+        Polars DataFrame with columns ``ts_event_nano``, ``instrument_id``,
+        and 10 levels of ``bid_px_XX``, ``ask_px_XX``, ``bid_sz_XX``,
+        ``ask_sz_XX`` (XX = 00..09).
+    """
 
-    # -- Print the book --
-    print("(i)")
-    book = L2Book(df)
-    print(book)
+    _N_LEVELS: int = 10
 
-    # -- 200 share mkt buy --
-    print("\n"+"(ii)")
-    book = L2Book(df)
-    size = 200
-    vwap = book.accept_mkt_order("BUY", size)
-    print(book)
+    def __init__(self, df: pl.DataFrame) -> None:
+        df = df.sort("ts_event_nano")
 
-    # -- Trading Costs Analysis --
-    print("\n" + "(iii)")
-    book = L2Book(df)
-    sizes = [200, 400, 800, 1000, 1500, 2000]
-    side = "BUY"
-    tcosts = []
-    best_px = book.asks[0][0] if side == "BUY" else book.bids[0][0]
-    for q in sizes:
-        book = L2Book(df)
-        vwap = book.accept_mkt_order(side, q)
-        arrival_cost = vwap - best_px
-        tcosts.append(arrival_cost)
-    tcosts = pl.DataFrame(data={
-        "order_size": sizes,
-        "tcosts": tcosts
-        })
+        # Extract numpy arrays for fast row-level access (writable copies).
+        self.ts_ns: np.ndarray = df["ts_event_nano"].to_numpy().copy()
+        self.instrument_id: np.ndarray = df["instrument_id"].to_numpy().copy()
+
+        lvls = [f"{i:02d}" for i in range(self._N_LEVELS)]
+        self.bid_px: np.ndarray = df.select([f"bid_px_{l}" for l in lvls]).to_numpy().copy().astype(np.float64)
+        self.ask_px: np.ndarray = df.select([f"ask_px_{l}" for l in lvls]).to_numpy().copy().astype(np.float64)
+        self.bid_sz: np.ndarray = df.select([f"bid_sz_{l}" for l in lvls]).to_numpy().copy().astype(np.float64)
+        self.ask_sz: np.ndarray = df.select([f"ask_sz_{l}" for l in lvls]).to_numpy().copy().astype(np.float64)
+
+        self._n_rows: int = len(self.ts_ns)
+        self._cur_idx: int = 0
+
+        # Internal book state — mutable lists of (price, size) tuples.
+        self.bids: list[tuple[float, int]]
+        self.asks: list[tuple[float, int]]
+        self.bids, self.asks = self._build_book_from_row(0)
+
+    # ------------------------------------------------------------------
+    # helpers
+    # ------------------------------------------------------------------
+
+    def _build_book_from_row(self, idx: int) -> tuple[list[tuple[float, int]], list[tuple[float, int]]]:
+        """
+        Read row *idx* from the numpy arrays and return ``(bids, asks)``.
+
+        Parameters
+        ----------
+        idx : int
+            Row index into the numpy arrays.
+
+        Returns
+        -------
+        tuple[list[tuple[float, int]], list[tuple[float, int]]]
+            Bid and ask sides, each a list of ``(price, size)`` tuples with
+            zero-price or zero-size levels filtered out.
+        """
+        bids = [
+            (float(self.bid_px[idx, l]), int(self.bid_sz[idx, l]))
+            for l in range(self._N_LEVELS)
+            if self.bid_px[idx, l] > 0 and self.bid_sz[idx, l] > 0
+        ]
+        asks = [
+            (float(self.ask_px[idx, l]), int(self.ask_sz[idx, l]))
+            for l in range(self._N_LEVELS)
+            if self.ask_px[idx, l] > 0 and self.ask_sz[idx, l] > 0
+        ]
+        return bids, asks
     
-    # Analyze
-    print(tcosts.describe())
-    X = sm.add_constant((tcosts["order_size"]).to_numpy())
-    y = (tcosts["tcosts"] * 10_000).to_numpy()
-    result = sm.OLS(y, X).fit()
-    print(result.summary())
-    """Significant results because pval low, CI does not contain 0, non-zero slope"""
-    
-    # Plotting
-    plt.scatter(tcosts["order_size"], tcosts["tcosts"] * 10_000, label="True Data")
-    x = np.arange(0,2000,1)
-    plt.plot(x,
-             result.params[1] * x + result.params[0],
-             linewidth=1, color='red', linestyle = "--", label=f"Fitted Line: {result.params[1]:.2f} * x + {result.params[0]:.2f}")
-    plt.title("Arrival Cost as a Function of Order Size")
-    plt.xlabel("Order Size")
-    plt.ylabel("Arrival Cost (bps)")
-    plt.legend()
-    plt.show()
+    def _sync_book_to_arrays(self) -> None:
+        """Write ``self.bids`` / ``self.asks`` back into the numpy arrays at
+        ``self._cur_idx``, shifting remaining levels to the front and zeroing
+        out any trailing (now-empty) level slots."""
+        idx = self._cur_idx
+
+        # --- bids ---
+        for l in range(self._N_LEVELS):
+            if l < len(self.bids):
+                self.bid_px[idx, l] = self.bids[l][0]
+                self.bid_sz[idx, l] = self.bids[l][1]
+            else:
+                self.bid_px[idx, l] = np.nan
+                self.bid_sz[idx, l] = np.nan
+
+        # --- asks ---
+        for l in range(self._N_LEVELS):
+            if l < len(self.asks):
+                self.ask_px[idx, l] = self.asks[l][0]
+                self.ask_sz[idx, l] = self.asks[l][1]
+            else:
+                self.ask_px[idx, l] = np.nan
+                self.ask_sz[idx, l] = np.nan
+
+    def _apply_impact_to_future(self, side: str, fills: list[tuple[float, int]]) -> None:
+        """
+        Propagate liquidity removal from *fills* into all future rows.
+
+        For each filled price level, every future row whose corresponding
+        price array matches that price has its size reduced by the filled
+        quantity (clamped to 0).
+
+        Parameters
+        ----------
+        side : str
+            ``"BUY"`` or ``"SELL"`` — determines which arrays to modify.
+        fills : list[tuple[float, int]]
+            List of ``(fill_price, fill_qty)`` produced by the execution.
+        """
+        start = self._cur_idx + 1
+        if start >= self._n_rows or not fills:
+            return
+
+        if side == "BUY":
+            px_arr = self.ask_px
+            sz_arr = self.ask_sz
+        else:
+            px_arr = self.bid_px
+            sz_arr = self.bid_sz
+
+        future_px = px_arr[start:]
+        future_sz = sz_arr[start:]
+
+        for fill_px, fill_qty in fills:
+            mask = future_px == fill_px
+            future_sz[mask] -= fill_qty
+        np.maximum(future_sz, 0, out=future_sz)
+
+        # Compact: remove zero-size levels (where price is still set) and
+        # shift deeper levels forward so there are no gaps.
+        # A level needs removal when size==0 but price is not NaN (genuinely emptied).
+        has_gap = np.any((future_sz == 0) & ~np.isnan(future_px), axis=1)
+        for row in np.where(has_gap)[0]:
+            keep = (future_sz[row] > 0) | np.isnan(future_px[row])
+            n_keep = int(np.sum(keep))
+            future_px[row, :n_keep] = future_px[row][keep]
+            future_sz[row, :n_keep] = future_sz[row][keep]
+            future_px[row, n_keep:] = np.nan
+            future_sz[row, n_keep:] = np.nan
+
+    # ------------------------------------------------------------------
+    # time control
+    # ------------------------------------------------------------------
+
+    def advance_to(self, ts_nano: int) -> None:
+        """
+        Advance the simulator to the last snapshot with ``ts_event_nano <= ts_nano``.
+
+        The internal book state is replaced by the market snapshot at that
+        point in time, discarding any prior simulated modifications.
+
+        Parameters
+        ----------
+        ts_nano : int
+            Target nanosecond timestamp.
+        """
+        # searchsorted(..., "right") gives the first index *after* ts_nano;
+        # subtract 1 to land on the last row <= ts_nano.
+        target = int(np.searchsorted(self.ts_ns, ts_nano, side="right")) - 1
+        if target < 0:
+            target = 0
+        if target >= self._n_rows:
+            target = self._n_rows - 1
+
+        self._cur_idx = target
+        self.bids, self.asks = self._build_book_from_row(target)
+
+    # ------------------------------------------------------------------
+    # order execution
+    # ------------------------------------------------------------------
+
+    def accept_mkt_order(self, side: str, order_size: int, ts_nano: int, latency_ns: int = 0) -> dict:
+        """
+        Simulate a market order at a given timestamp.
+
+        Parameters
+        ----------
+        side : str
+            ``"BUY"`` (walks asks) or ``"SELL"`` (walks bids).
+        order_size : int
+            Number of shares to fill.
+        ts_nano : int
+            Nanosecond timestamp at which the order is sent.
+        latency_ns : int
+            Additional latency in nanoseconds before execution (default 0).
+
+        Returns
+        -------
+        dict
+            ``vwap`` — volume-weighted average fill price.
+            ``fills`` — list of ``(price, qty_filled)`` tuples.
+            ``total_filled`` — total shares filled (may be < *order_size*).
+            ``levels_swept`` — number of levels fully consumed.
+            ``executed_at_ns`` — ``ts_event_nano`` of the book row the order
+            executed against.
+            ``executed_at_idx`` — integer index of that row in the internal
+            arrays (useful for slicing).
+            ``arrival_cost`` — difference between VWAP and midprice at
+            execution time (positive means paid more than mid for BUY,
+            received less than mid for SELL).
+        """
+        self.advance_to(ts_nano + latency_ns)
+        mid = self.get_midprice()
+        book = self.asks if side == "BUY" else self.bids
+
+        fills: list[tuple[float, int]] = []
+        remaining = order_size
+        levels_swept = 0
+
+        for i, (px, sz) in enumerate(book):
+            if remaining <= 0:
+                break
+            filled = min(remaining, sz)
+            fills.append((px, filled))
+            remaining -= filled
+            if filled == sz:
+                levels_swept += 1
+                book[i] = (px, 0)
+            else:
+                book[i] = (px, sz - filled)
+
+        # Remove fully swept levels from the front.
+        del book[:levels_swept]
+
+        total_filled = order_size - remaining
+        vwap = (
+            sum(px * qty for px, qty in fills) / total_filled
+            if total_filled > 0
+            else 0.0
+        )
+
+        if mid is not None and total_filled > 0:
+            arrival_cost = vwap - mid if side == "BUY" else mid - vwap
+        else:
+            arrival_cost = None
+
+        self._sync_book_to_arrays()
+        self._apply_impact_to_future(side, fills)
+
+        return {
+            "vwap": vwap,
+            "fills": fills,
+            "total_filled": total_filled,
+            "levels_swept": levels_swept,
+            "executed_at_ns": int(self.ts_ns[self._cur_idx]),
+            "executed_at_idx": self._cur_idx,
+            "arrival_cost": arrival_cost,
+        }
+
+    def accept_ioc_lmt_order(self, side: str, limit_price: float, order_size: int, ts_nano: int, latency_ns: int = 0) -> dict:
+        """
+        Simulate an IOC Limit order execution at a given timestamp.
+
+        Parameters
+        ----------
+        side : str
+            ``"BUY"`` (walks asks) or ``"SELL"`` (walks bids).
+        limit_price: float
+            Limit price.
+        order_size : int
+            Number of shares to fill.
+        ts_nano : int
+            Nanosecond timestamp at which the order is sent.
+        latency_ns : int
+            Additional latency in nanoseconds before execution (default 0).
+
+        Returns
+        -------
+        dict
+            ``vwap`` — volume-weighted average fill price.
+            ``fills`` — list of ``(price, qty_filled)`` tuples.
+            ``total_filled`` — total shares filled (may be < *order_size*).
+            ``levels_swept`` — number of levels fully consumed.
+            ``executed_at_ns`` — ``ts_event_nano`` of the book row the order
+            executed against.
+            ``executed_at_idx`` — integer index of that row in the internal
+            arrays (useful for slicing).
+            ``arrival_cost`` — difference between VWAP and midprice at
+            execution time (positive means paid more than mid for BUY,
+            received less than mid for SELL).
+        """
+        self.advance_to(ts_nano + latency_ns)
+        mid = self.get_midprice()
+        book = self.asks if side == "BUY" else self.bids
+
+        fills: list[tuple[float, int]] = []
+        remaining = order_size
+        levels_swept = 0
+
+        for i, (px, sz) in enumerate(book):
+            if remaining <= 0:
+                break
+            if px > limit_price and side == "BUY":
+                break
+            if px < limit_price and side == "SELL":
+                break
+            filled = min(remaining, sz)
+            fills.append((px, filled))
+            remaining -= filled
+            if filled == sz:
+                levels_swept += 1
+                book[i] = (px, 0)
+            else:
+                book[i] = (px, sz - filled)
+
+        # Remove fully swept levels from the front.
+        del book[:levels_swept]
+
+        total_filled = order_size - remaining
+        vwap = (
+            sum(px * qty for px, qty in fills) / total_filled
+            if total_filled > 0
+            else 0.0
+        )
+
+        if mid is not None and total_filled > 0:
+            arrival_cost = vwap - mid if side == "BUY" else mid - vwap
+        else:
+            arrival_cost = None
+
+        self._sync_book_to_arrays()
+        self._apply_impact_to_future(side, fills)
+
+        return {
+            "vwap": vwap,
+            "fills": fills,
+            "total_filled": total_filled,
+            "levels_swept": levels_swept,
+            "executed_at_ns": int(self.ts_ns[self._cur_idx]),
+            "executed_at_idx": self._cur_idx,
+            "arrival_cost": arrival_cost,
+        }
+
+    # ------------------------------------------------------------------
+    # introspection
+    # ------------------------------------------------------------------
+
+    def get_book_state(self) -> dict:
+        """
+        Return the current internal book state.
+
+        Returns
+        -------
+        dict
+            ``bids`` — list of ``(price, size)`` tuples.
+            ``asks`` — list of ``(price, size)`` tuples.
+            ``ts_nano`` — nanosecond timestamp of the current snapshot.
+        """
+        return {
+            "bids": list(self.bids),
+            "asks": list(self.asks),
+            "ts_nano": int(self.ts_ns[self._cur_idx]),
+        }
+
+    def get_midprice(self) -> float | None:
+        """
+        Return the midprice (average of best bid and best ask).
+
+        Returns
+        -------
+        float or None
+            ``None`` if either side of the book is empty.
+        """
+        if not self.bids or not self.asks:
+            return None
+        return (self.bids[0][0] + self.asks[0][0]) / 2.0
+
+    def get_book_df(self) -> pl.DataFrame:
+        """
+        Return the full orderbook across all timestamps as a Polars DataFrame.
+
+        Values are read from the internal numpy arrays, so they reflect any
+        post-execution modifications propagated to future rows.
+
+        Returns
+        -------
+        pl.DataFrame
+            DataFrame with ``ts_event_nano``, ``instrument_id``, and 10 levels
+            of ``bid_px_XX``, ``ask_px_XX``, ``bid_sz_XX``, ``ask_sz_XX``.
+        """
+        data: dict[str, np.ndarray] = {
+            "ts_event_nano": self.ts_ns,
+            "instrument_id": self.instrument_id,
+        }
+        for l in range(self._N_LEVELS):
+            tag = f"{l:02d}"
+            data[f"bid_px_{tag}"] = self.bid_px[:, l]
+            data[f"ask_px_{tag}"] = self.ask_px[:, l]
+            data[f"bid_sz_{tag}"] = self.bid_sz[:, l]
+            data[f"ask_sz_{tag}"] = self.ask_sz[:, l]
+        return pl.DataFrame(data)
+
