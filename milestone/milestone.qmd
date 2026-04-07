@@ -1,0 +1,73 @@
+---
+title: "Measuring Alpha Decay: Analysis of Order Splitting via Trade Markouts"
+date: today
+date-modified: last-modified
+author:
+  - name: John Joe
+    corresponding: true
+    email: computo@sfds.asso.fr
+    url: https://computo.sfds.asso.fr
+    orcid: 0000-0000-0000-0000
+    affiliations:
+      - name: Texas A&M University
+        department: Electrical and Computer Engineering
+        address: College Station, TX 77843, USA
+  - name: John Joe
+  - name: John Joe
+description: |
+  This document provides a template based on the quarto system for contributions to Computo. The github repository in itself provides a specific quarto extension useful for authors (and editors!).
+keywords: [template, quarto, R, Python, reproductibility]
+doi: 10.xxxx/xxx-xxx
+citation:
+  type: article-journal
+  container-title: "NeurIPS"
+  doi: "10.xxxx/xxx-xxx"
+  url: "https://github.com/computorg/computo-quarto-extension"
+  issn: "2824-7795"
+google-scholar: true
+github-user: stevengogogo
+repo: "neurips-template-enhanced"
+draft: true # set to false once the build is running
+published: false # will be set to true once accepted
+format:
+  neurips-pdf: 
+    keep-tex: true
+  neurips-html: default
+---
+
+```{python}
+#| echo: false
+from dotenv import load_dotenv
+import sys
+sys.path.insert(0, '..')
+load_dotenv()
+from saf_lib.simulation import ExecutionSimulator
+```
+
+# Abstract
+A fundamental hurdle in trading is the balance between market impact and alpha decay. Submitting a large order leads to significant price impact as it takes the liquidity from the Limit Order Book (LOB). On the other hand, splitting a large order into smaller chunks over seconds or minutes exposes unexecuted orders to alpha decay and price drifts. This hurdle is especially prevalent in crowded markets where thousands of algorithms are trading on similar signals.
+
+The goal of the project will be to measure the average alpha lost when forced to split orders by comparing different execution strategies. In the execution of this goal, will use post-trade markouts to evaluate the price impact and the drift over short periods of time as we follow the signal. Additionally, we will record the average cost of entering the position, the aim of which is to minimize the cost.
+
+# Goals for the Milestone
+The goals we've set for this milestone report are as follows.
+
+1. A data ingestion pipeline, which will parse L2 order book data from Databento for use in our ` ExecutionSimulator`.
+2. An `ExecutionSimulator` which can simulate the effects and performance of multiple execution strategies, as well as the effects of latency and LOB replenishment on the fill strategies.
+3. Markout plots, which help inform the execution strategies. We use markouts to explore the effectiveness of order book imbalance (OBI) as a predictor of short term price movements that may inform an execution strategy.
+
+# Developments
+
+## Sourcing Data
+
+We are using the `MBP-10` schema from Databento, which provides the top 10 levels of the Limit Order Book (LOB) for a selection of stocks and date range. The dataset includes all order book updates (trades, adds, cancels, etc.) which allows us to reconstruct the market dynamics at a granular level. The data is sourced from [Databento](https://databento.com/docs/schemas-and-data-formats/mbp-10?historical=python&live=python&reference=python).
+
+In the project milestone, we utilize L2 data for `AMZN` from `"2026-03-25":"2026-03-27"`. We are intentionally using a small time range and one ticker in order to minimize runtime and memory requirements while we develop the methodology we need. Through the end of the project, we will be adding multiple assets spanning the large/small market cap and tick-size range to explore how different assets require different execution strategies.
+
+Mechanically, we have written a simple `MBP10DataAdapter` class that uses a hierarchical cacheing structure. This allows us to fetch data from Databento only when absolutely necessary, which minimizes cost and tiem spent downloading data. The adapter caches on `[tickers, start, end, dataset, schema]`. Here, our schema is always `MBP-10` and we use the `XNAS.ITCH` Dataset which gives us access to only the Nasdaq exchange.
+
+# Findings
+
+# Goals for the Future
+
+

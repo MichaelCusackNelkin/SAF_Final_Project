@@ -87,11 +87,18 @@ class ExecutionSimulator:
         Polars DataFrame with columns ``ts_event_nano``, ``instrument_id``,
         and 10 levels of ``bid_px_XX``, ``ask_px_XX``, ``bid_sz_XX``,
         ``ask_sz_XX`` (XX = 00..09).
+    replenishment_rate : float
+        Lambda parameter for the Poisson process that draws new liquidity
+        sizes when replenishing swept price levels after an execution.
+        A value of 0 disables replenishment (default).
+    latency_ns : int
+        Simulated latency in nanoseconds added to every order's timestamp
+        before execution (default 0).
     """
 
     _N_LEVELS: int = 10
 
-    def __init__(self, df: pl.DataFrame) -> None:
+    def __init__(self, df: pl.DataFrame, replenishment_rate: float = 0.0, latency_ns: int = 0) -> None:
         df = df.sort("ts_event_nano")
 
         # Extract numpy arrays for fast row-level access (writable copies).
@@ -106,6 +113,8 @@ class ExecutionSimulator:
 
         self._n_rows: int = len(self.ts_ns)
         self._cur_idx: int = 0
+        self.replenishment_rate: float = replenishment_rate
+        self.latency_ns: int = latency_ns
 
         # Internal book state — mutable lists of (price, size) tuples.
         self.bids: list[tuple[float, int]]
@@ -143,6 +152,99 @@ class ExecutionSimulator:
         ]
         return bids, asks
     
+    def _compute_replenishment(self, side: str) -> list[tuple[float, int]]:
+        """
+        Draw Poisson-distributed liquidity for swept gap levels after execution.
+
+        This method only *computes* which levels to add and their sizes — it
+        does **not** modify ``self.bids`` / ``self.asks``.  The replenished
+        liquidity is written exclusively to future rows (starting at
+        ``_cur_idx + 1``) by ``_apply_replenishment_to_future``, so the fill
+        row itself reflects the depleted book state.
+
+        For a BUY order (asks were consumed): replenish ask levels from the
+        current best ask down to ``best_bid + 0.01``.
+
+        For a SELL order (bids were consumed): replenish bid levels from the
+        current best bid up to ``best_ask - 0.01``.
+
+        Parameters
+        ----------
+        side : str
+            ``"BUY"`` or ``"SELL"`` — the side of the *order* that executed.
+
+        Returns
+        -------
+        list[tuple[float, int]]
+            Levels to be inserted, as ``(price, size)`` tuples.
+        """
+        if self.replenishment_rate <= 0:
+            return []
+
+        added: list[tuple[float, int]] = []
+
+        if side == "BUY":
+            if not self.bids or not self.asks:
+                return []
+            best_bid = self.bids[0][0]
+            best_ask = self.asks[0][0]
+            existing_ask_prices = {round(px, 2) for px, _ in self.asks}
+            level_px = round(best_ask - 0.01, 2)
+            floor_px = round(best_bid + 0.01, 2)
+            while level_px >= floor_px:
+                if level_px not in existing_ask_prices:
+                    sz = int(np.random.poisson(self.replenishment_rate))
+                    if sz > 0:
+                        added.append((level_px, sz))
+                level_px = round(level_px - 0.01, 2)
+        else:
+            if not self.bids or not self.asks:
+                return []
+            best_ask = self.asks[0][0]
+            best_bid = self.bids[0][0]
+            existing_bid_prices = {round(px, 2) for px, _ in self.bids}
+            level_px = round(best_bid + 0.01, 2)
+            ceiling_px = round(best_ask - 0.01, 2)
+            while level_px <= ceiling_px:
+                if level_px not in existing_bid_prices:
+                    sz = int(np.random.poisson(self.replenishment_rate))
+                    if sz > 0:
+                        added.append((level_px, sz))
+                level_px = round(level_px + 0.01, 2)
+
+        return added
+
+    def _apply_replenishment_to_future(self, side: str, added: list[tuple[float, int]]) -> None:
+        """
+        Propagate replenished liquidity into future rows starting at
+        ``_cur_idx + 1`` (the next timestamp after the fill).
+
+        Parameters
+        ----------
+        side : str
+            ``"BUY"`` or ``"SELL"`` — the side of the *order* that executed.
+            A BUY replenishes asks; a SELL replenishes bids.
+        added : list[tuple[float, int]]
+            List of ``(price, size)`` tuples to add.
+        """
+        start = self._cur_idx + 1
+        if start >= self._n_rows or not added:
+            return
+
+        if side == "BUY":
+            px_arr = self.ask_px
+            sz_arr = self.ask_sz
+        else:
+            px_arr = self.bid_px
+            sz_arr = self.bid_sz
+
+        future_px = px_arr[start:]
+        future_sz = sz_arr[start:]
+
+        for add_px, add_qty in added:
+            mask = future_px == add_px
+            future_sz[mask] += add_qty
+
     def _sync_book_to_arrays(self) -> None:
         """Write ``self.bids`` / ``self.asks`` back into the numpy arrays at
         ``self._cur_idx``, shifting remaining levels to the front and
@@ -258,7 +360,7 @@ class ExecutionSimulator:
     # order execution
     # ------------------------------------------------------------------
 
-    def accept_mkt_order(self, side: str, order_size: int, ts_nano: int, latency_ns: int = 0) -> dict:
+    def accept_mkt_order(self, side: str, order_size: int, ts_nano: int) -> dict:
         """
         Simulate a market order at a given timestamp.
 
@@ -270,8 +372,6 @@ class ExecutionSimulator:
             Number of shares to fill.
         ts_nano : int
             Nanosecond timestamp at which the order is sent.
-        latency_ns : int
-            Additional latency in nanoseconds before execution (default 0).
 
         Returns
         -------
@@ -288,7 +388,7 @@ class ExecutionSimulator:
             execution time (positive means paid more than mid for BUY,
             received less than mid for SELL).
         """
-        self.advance_to(ts_nano + latency_ns)
+        self.advance_to(ts_nano + self.latency_ns)
         mid = self.get_midprice()
         book = self.asks if side == "BUY" else self.bids
 
@@ -323,8 +423,10 @@ class ExecutionSimulator:
         else:
             arrival_cost = None
 
+        replenished = self._compute_replenishment(side)
         self._sync_book_to_arrays()
         self._apply_impact_to_future(side, fills)
+        self._apply_replenishment_to_future(side, replenished)
 
         return {
             "vwap": vwap,
@@ -336,7 +438,7 @@ class ExecutionSimulator:
             "arrival_cost": arrival_cost,
         }
 
-    def accept_ioc_lmt_order(self, side: str, limit_price: float, order_size: int, ts_nano: int, latency_ns: int = 0) -> dict:
+    def accept_ioc_lmt_order(self, side: str, limit_price: float, order_size: int, ts_nano: int) -> dict:
         """
         Simulate an IOC Limit order execution at a given timestamp.
 
@@ -350,8 +452,6 @@ class ExecutionSimulator:
             Number of shares to fill.
         ts_nano : int
             Nanosecond timestamp at which the order is sent.
-        latency_ns : int
-            Additional latency in nanoseconds before execution (default 0).
 
         Returns
         -------
@@ -368,7 +468,7 @@ class ExecutionSimulator:
             execution time (positive means paid more than mid for BUY,
             received less than mid for SELL).
         """
-        self.advance_to(ts_nano + latency_ns)
+        self.advance_to(ts_nano + self.latency_ns)
         mid = self.get_midprice()
         book = self.asks if side == "BUY" else self.bids
 
@@ -407,8 +507,10 @@ class ExecutionSimulator:
         else:
             arrival_cost = None
 
+        replenished = self._compute_replenishment(side)
         self._sync_book_to_arrays()
         self._apply_impact_to_future(side, fills)
+        self._apply_replenishment_to_future(side, replenished)
 
         return {
             "vwap": vwap,
@@ -419,6 +521,208 @@ class ExecutionSimulator:
             "executed_at_idx": self._cur_idx,
             "arrival_cost": arrival_cost,
         }
+
+    # ------------------------------------------------------------------
+    # filling strategies
+    # ------------------------------------------------------------------
+
+    def naive_fill(
+        self, side: str, parent_size: int, ts_nano: int
+    ) -> tuple[dict, pl.DataFrame]:
+        """
+        Execute a single market order for the full parent size.
+
+        Parameters
+        ----------
+        side : str
+            ``"BUY"`` or ``"SELL"``.
+        parent_size : int
+            Total number of shares to fill.
+        ts_nano : int
+            Nanosecond timestamp at which the order is sent.
+
+        Returns
+        -------
+        tuple[dict, pl.DataFrame]
+            The execution result dict and the post-execution book DataFrame.
+        """
+        result = self.accept_mkt_order(side, parent_size, ts_nano)
+        return result, self.get_book_df()
+
+    def constant_fill(
+        self,
+        side: str,
+        parent_size: int,
+        start_ts_ns: int,
+        wait_ns: int,
+        n_chunks: int,
+    ) -> tuple[list[dict], pl.DataFrame]:
+        """
+        Split a parent order into equal-sized market-order chunks.
+
+        Parameters
+        ----------
+        side : str
+            ``"BUY"`` or ``"SELL"``.
+        parent_size : int
+            Total number of shares to fill.
+        start_ts_ns : int
+            Nanosecond timestamp of the first child order.
+        wait_ns : int
+            Nanosecond interval between child orders.
+        n_chunks : int
+            Number of child orders.
+
+        Returns
+        -------
+        tuple[list[dict], pl.DataFrame]
+            List of execution result dicts and the post-execution book
+            DataFrame.
+        """
+        chunk_size = int(parent_size / n_chunks)
+        timestamps = np.arange(start_ts_ns, start_ts_ns + n_chunks * wait_ns, wait_ns)
+        results: list[dict] = []
+        for t in timestamps:
+            r = self.accept_mkt_order(side, chunk_size, int(t))
+            results.append(r)
+        return results, self.get_book_df()
+
+    def constant_ioc_fill(
+        self,
+        side: str,
+        limit_px: float,
+        parent_size: int,
+        start_ts_ns: int,
+        wait_ns: int,
+        n_chunks: int,
+    ) -> tuple[list[dict], pl.DataFrame]:
+        """
+        Split a parent order into equal-sized IOC limit-order chunks.
+
+        Parameters
+        ----------
+        side : str
+            ``"BUY"`` or ``"SELL"``.
+        limit_px : float
+            Limit price for every child IOC order.
+        parent_size : int
+            Total number of shares to fill.
+        start_ts_ns : int
+            Nanosecond timestamp of the first child order.
+        wait_ns : int
+            Nanosecond interval between child orders.
+        n_chunks : int
+            Number of child orders.
+
+        Returns
+        -------
+        tuple[list[dict], pl.DataFrame]
+            List of execution result dicts and the post-execution book
+            DataFrame.
+        """
+        chunk_size = int(parent_size / n_chunks)
+        timestamps = np.arange(start_ts_ns, start_ts_ns + n_chunks * wait_ns, wait_ns)
+        results: list[dict] = []
+        for t in timestamps:
+            r = self.accept_ioc_lmt_order(side, limit_px, chunk_size, int(t))
+            results.append(r)
+        return results, self.get_book_df()
+
+    def obi_adaptive_fill(
+        self,
+        side: str,
+        parent_size: int,
+        start_ts_ns: int,
+        max_size: int,
+        threshold: float,
+        horizon: int,
+    ) -> tuple[list[dict], pl.DataFrame, pl.DataFrame]:
+        """
+        Adaptively fill a parent order using order-book imbalance (OBI).
+
+        At each step the method scans the book for timestamps within the
+        rolling *horizon* window, computes OBI, derives order sizes
+        proportional to ``|OBI| * max_size``, and sends IOC limit orders when
+        the imbalance exceeds *threshold* in the favourable direction.
+
+        Parameters
+        ----------
+        side : str
+            ``"BUY"`` or ``"SELL"``.
+        parent_size : int
+            Total number of shares to fill.
+        max_size : int
+            Maximum child-order size (scaled by ``|OBI|``).
+        threshold : float
+            OBI threshold that must be exceeded before a child order fires.
+        start_ts_ns : int
+            Nanosecond timestamp at which to begin scanning.
+        horizon : int
+            Nanosecond look-ahead window for candidate selection.
+
+        Returns
+        -------
+        tuple[list[dict], pl.DataFrame, pl.DataFrame]
+            ``(results, final_book_df, last_candidates)`` — the list of
+            execution result dicts, the post-execution book DataFrame, and the
+            candidates DataFrame from the last iteration.
+        """
+        init_ts_ns = start_ts_ns
+        results: list[dict] = []
+        remaining = parent_size
+        book_df = self.get_book_df()
+        candidates = pl.DataFrame()
+
+        # Fix limit price at initialization time to avoid lookahead
+        init_row = book_df.filter(pl.col("ts_event_nano") >= init_ts_ns).row(0, named=True)
+        limit = init_row["ask_px_03"] if side == "BUY" else init_row["bid_px_03"]
+
+        while remaining > 0 or start_ts_ns < horizon + init_ts_ns:
+            candidates = (
+                book_df
+                .filter(
+                    pl.col("ts_event_nano").is_between(start_ts_ns, start_ts_ns + horizon)
+                )
+                .with_columns(
+                    pl.col("bid_sz_00").fill_null(0).fill_nan(0).alias("bid_sz_00"),
+                    pl.col("ask_sz_00").fill_null(0).fill_nan(0).alias("ask_sz_00"),
+                )
+                .with_columns(
+                    (
+                        (pl.col("bid_sz_00").cast(pl.Int32) - pl.col("ask_sz_00").cast(pl.Int32))
+                        / (pl.col("bid_sz_00").cast(pl.Int32) + pl.col("ask_sz_00").cast(pl.Int32))
+                    ).alias("obi")
+                )
+                .with_columns(
+                    (pl.col("obi").abs() * max_size)
+                    .clip(1, None)
+                    .cast(pl.Int64)
+                    .alias("order_size")
+                )
+            )
+
+            if side == "BUY":
+                candidates = candidates.filter(pl.col("obi") > threshold)
+            else:
+                candidates = candidates.filter(pl.col("obi") < threshold)
+
+            if candidates.is_empty():
+                break
+
+            row = candidates.row(0, named=True)
+            size = min(row["order_size"], remaining)
+
+            if size <= 0:
+                break
+
+            r = self.accept_ioc_lmt_order(side, limit, size, row["ts_event_nano"])
+            remaining -= r["total_filled"]
+            results.append(r)
+
+            start_ts_ns = row["ts_event_nano"] + 1
+            book_df = self.get_book_df()
+
+        return results, self.get_book_df(), candidates
 
     # ------------------------------------------------------------------
     # introspection
