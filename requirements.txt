@@ -3,5 +3,6 @@ pandas
 databento
 matplotlib
 statsmodels
-sklearn
+scikit-learn
 polars
+pyyaml
