@@ -145,27 +145,36 @@ class ExecutionSimulator:
     
     def _sync_book_to_arrays(self) -> None:
         """Write ``self.bids`` / ``self.asks`` back into the numpy arrays at
-        ``self._cur_idx``, shifting remaining levels to the front and zeroing
-        out any trailing (now-empty) level slots."""
+        ``self._cur_idx``, shifting remaining levels to the front and
+        back-filling any trailing empty slots with synthetic liquidity
+        (one tick worse per level, random size 100-150)."""
         idx = self._cur_idx
 
         # --- bids ---
+        n_bids = len(self.bids)
         for l in range(self._N_LEVELS):
-            if l < len(self.bids):
+            if l < n_bids:
                 self.bid_px[idx, l] = self.bids[l][0]
                 self.bid_sz[idx, l] = self.bids[l][1]
             else:
-                self.bid_px[idx, l] = np.nan
-                self.bid_sz[idx, l] = np.nan
+                prev_px = self.bid_px[idx, l - 1]
+                syn_px = round(prev_px - 0.01, 2)
+                self.bid_px[idx, l] = syn_px
+                self.bid_sz[idx, l] = 100
+                self.bids.append((syn_px, 100))
 
         # --- asks ---
+        n_asks = len(self.asks)
         for l in range(self._N_LEVELS):
-            if l < len(self.asks):
+            if l < n_asks:
                 self.ask_px[idx, l] = self.asks[l][0]
                 self.ask_sz[idx, l] = self.asks[l][1]
             else:
-                self.ask_px[idx, l] = np.nan
-                self.ask_sz[idx, l] = np.nan
+                prev_px = self.ask_px[idx, l - 1]
+                syn_px = round(prev_px + 0.01, 2)
+                self.ask_px[idx, l] = syn_px
+                self.ask_sz[idx, l] = 100
+                self.asks.append((syn_px, 100))
 
     def _apply_impact_to_future(self, side: str, fills: list[tuple[float, int]]) -> None:
         """
@@ -210,8 +219,13 @@ class ExecutionSimulator:
             n_keep = int(np.sum(keep))
             future_px[row, :n_keep] = future_px[row][keep]
             future_sz[row, :n_keep] = future_sz[row][keep]
-            future_px[row, n_keep:] = np.nan
-            future_sz[row, n_keep:] = np.nan
+            for l in range(n_keep, self._N_LEVELS):
+                prev = future_px[row, l - 1]
+                if side == "BUY":
+                    future_px[row, l] = round(prev + 0.01, 2)
+                else:
+                    future_px[row, l] = round(prev - 0.01, 2)
+                future_sz[row, l] = 100
 
     # ------------------------------------------------------------------
     # time control
