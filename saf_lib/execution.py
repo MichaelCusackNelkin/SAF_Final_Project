@@ -585,7 +585,7 @@ def plot_markout_curves(
     cmap = plt.cm.RdYlGn
     for i, (label, row) in enumerate(binned.iterrows()):
         color = cmap(i / max(len(binned) - 1, 1))
-        ax.plot(horizons, row[cols].values, marker="o", label=str(label), color=color)
+        ax.plot(horizons, row[cols].values, linewidth=2, label=str(label), color=color)
 
     ax.set_xlabel("Horizon (ms)")
     ax.set_ylabel("Markout (bps)")

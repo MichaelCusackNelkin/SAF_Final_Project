@@ -64,6 +64,46 @@
 \fi
 \makeatother
 
+\usepackage{color}
+\usepackage{fancyvrb}
+\newcommand{\VerbBar}{|}
+\newcommand{\VERB}{\Verb[commandchars=\\\{\}]}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+% Add ',fontsize=\small' for more characters per line
+\usepackage{framed}
+\definecolor{shadecolor}{RGB}{241,243,245}
+\newenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
+\newcommand{\AlertTok}[1]{\textcolor[rgb]{0.68,0.00,0.00}{#1}}
+\newcommand{\AnnotationTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{#1}}
+\newcommand{\AttributeTok}[1]{\textcolor[rgb]{0.40,0.45,0.13}{#1}}
+\newcommand{\BaseNTok}[1]{\textcolor[rgb]{0.68,0.00,0.00}{#1}}
+\newcommand{\BuiltInTok}[1]{\textcolor[rgb]{0.00,0.23,0.31}{#1}}
+\newcommand{\CharTok}[1]{\textcolor[rgb]{0.13,0.47,0.30}{#1}}
+\newcommand{\CommentTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{#1}}
+\newcommand{\CommentVarTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{\textit{#1}}}
+\newcommand{\ConstantTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{#1}}
+\newcommand{\ControlFlowTok}[1]{\textcolor[rgb]{0.00,0.23,0.31}{\textbf{#1}}}
+\newcommand{\DataTypeTok}[1]{\textcolor[rgb]{0.68,0.00,0.00}{#1}}
+\newcommand{\DecValTok}[1]{\textcolor[rgb]{0.68,0.00,0.00}{#1}}
+\newcommand{\DocumentationTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{\textit{#1}}}
+\newcommand{\ErrorTok}[1]{\textcolor[rgb]{0.68,0.00,0.00}{#1}}
+\newcommand{\ExtensionTok}[1]{\textcolor[rgb]{0.00,0.23,0.31}{#1}}
+\newcommand{\FloatTok}[1]{\textcolor[rgb]{0.68,0.00,0.00}{#1}}
+\newcommand{\FunctionTok}[1]{\textcolor[rgb]{0.28,0.35,0.67}{#1}}
+\newcommand{\ImportTok}[1]{\textcolor[rgb]{0.00,0.46,0.62}{#1}}
+\newcommand{\InformationTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{#1}}
+\newcommand{\KeywordTok}[1]{\textcolor[rgb]{0.00,0.23,0.31}{\textbf{#1}}}
+\newcommand{\NormalTok}[1]{\textcolor[rgb]{0.00,0.23,0.31}{#1}}
+\newcommand{\OperatorTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{#1}}
+\newcommand{\OtherTok}[1]{\textcolor[rgb]{0.00,0.23,0.31}{#1}}
+\newcommand{\PreprocessorTok}[1]{\textcolor[rgb]{0.68,0.00,0.00}{#1}}
+\newcommand{\RegionMarkerTok}[1]{\textcolor[rgb]{0.00,0.23,0.31}{#1}}
+\newcommand{\SpecialCharTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{#1}}
+\newcommand{\SpecialStringTok}[1]{\textcolor[rgb]{0.13,0.47,0.30}{#1}}
+\newcommand{\StringTok}[1]{\textcolor[rgb]{0.13,0.47,0.30}{#1}}
+\newcommand{\VariableTok}[1]{\textcolor[rgb]{0.07,0.07,0.07}{#1}}
+\newcommand{\VerbatimStringTok}[1]{\textcolor[rgb]{0.13,0.47,0.30}{#1}}
+\newcommand{\WarningTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{\textit{#1}}}
 
 \usepackage{longtable,booktabs,array}
 \usepackage{calc} % for calculating minipage widths
@@ -167,9 +207,8 @@
 \IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
 \urlstyle{same}
 \hypersetup{
-  pdftitle={Measuring Alpha Decay: Analysis of Order Splitting via Trade Markouts},
-  pdfauthor={John Joe; John Joe; John Joe},
-  pdfkeywords={template, quarto, R, Python, reproductibility},
+  pdftitle={Milestone Report, The Cost of Order Splitting: Balancing Alpha Decay and Price Impact via Book-Imbalance Execution Strategies},
+  pdfauthor={Michael Csuack-Nelkin; Alick Zhou; Debby Zhao; Michael Bakshandeh; Vijeet Prasad},
   colorlinks=true,
   linkcolor={blue},
   filecolor={Maroon},
@@ -179,25 +218,29 @@
 
 
 
-\title{Measuring Alpha Decay: Analysis of Order Splitting via Trade
-Markouts}
+\title{Milestone Report, The Cost of Order Splitting: Balancing Alpha
+Decay and Price Impact via Book-Imbalance Execution Strategies}
 \author{
-\textbf{John Joe}%
-~\orcidlink{0000-0000-0000-0000}\\%
-%
-    Electrical and Computer Engineering\\%
-    Texas A\&M University\\%
-    College Station, TX 77843, USA\\%
-%
-\texttt{computo@sfds.asso.fr}\and 
-\textbf{John Joe}%
+\textbf{Michael Csuack-Nelkin}%
 \\%
 %
-\and 
-\textbf{John Joe}%
+\texttt{mc5882@columbia.edu}\and 
+\textbf{Alick Zhou}%
 \\%
 %
-}
+\texttt{az2960@columbia.edu}\and 
+\textbf{Debby Zhao}%
+\\%
+%
+\texttt{lz3083@columbia.edu}\and 
+\textbf{Michael Bakshandeh}%
+\\%
+%
+\texttt{mb5499@columbia.edu}\and 
+\textbf{Vijeet Prasad}%
+\\%
+%
+\texttt{vp2580@columbia.edu}}
 \date{2026-04-07}
 \begin{document}
 \maketitle
@@ -210,39 +253,39 @@ minutes exposes unexecuted orders to alpha decay and price drifts. This
 hurdle is especially prevalent in crowded markets where thousands of
 algorithms are trading on similar signals.
 
-The goal of the project will be to measure the average alpha lost when
-forced to split orders by comparing different execution strategies. In
-the execution of this goal, will use post-trade markouts to evaluate the
-price impact and the drift over short periods of time as we follow the
-signal. Additionally, we will record the average cost of entering the
-position, the aim of which is to minimize the cost.
+Our goal is to measure the average alpha lost when forced to split
+orders by comparing different execution strategies. This milestone
+report quanitifies our progress toward this goal. We use markout plots
+to analyze order book imbalance (OBI) as a predictor to help minimize
+the cost of chunking orders through price drifts and impact. We then
+build and validate an order execution simulator, and compare three
+execution strategies for a large-cap-small-tick equity.
 \end{abstract}
 
 
 \section{Goals for the Milestone}\label{goals-for-the-milestone}
 
-The goals we've set for this milestone report are as follows.
+The goals we have set for this milestone report are as follows.
 
 \begin{enumerate}
 \def\labelenumi{\arabic{enumi}.}
 \tightlist
 \item
-  A data ingestion pipeline, which will parse L2 order book data from
-  Databento for use in our \texttt{ExecutionSimulator}.
+  Build a data ingestion pipeline, which can parse L2 order book data
+  from Databento for use in our \texttt{ExecutionSimulator}. It should
+  use caching for speed improvements and API savings.
 \item
-  An \texttt{ExecutionSimulator} which can simulate the effects and
-  performance of multiple execution strategies, as well as the effects
-  of latency and LOB replenishment on the fill strategies.
+  Explore the effectiveness of order book imbalance (OBI) as a predictor
+  of short term price movements via markout plots. We should use these
+  plots to inform an execution strategy using OBI.
 \item
-  Markout plots, which help inform the execution strategies. We use
-  markouts to explore the effectiveness of order book imbalance (OBI) as
-  a predictor of short term price movements that may inform an execution
-  strategy.
+  Write an \texttt{ExecutionSimulator} which can simulate the effects
+  and performance of multiple execution strategies. It should be able to
+  simulate multiple execution strategies, and the effects latency and
+  limit order replenishment on the book.
 \end{enumerate}
 
-\section{Developments}\label{developments}
-
-\subsection{Sourcing Data}\label{sourcing-data}
+\section{Sourcing Data}\label{sourcing-data}
 
 We are using the \texttt{MBP-10} schema from Databento, which provides
 the top 10 levels of the Limit Order Book (LOB) for a selection of
@@ -250,26 +293,253 @@ stocks and date range. The dataset includes all order book updates
 (trades, adds, cancels, etc.) which allows us to reconstruct the market
 dynamics at a granular level. The data is sourced from
 \href{https://databento.com/docs/schemas-and-data-formats/mbp-10?historical=python&live=python&reference=python}{Databento}.
-
-In the project milestone, we utilize L2 data for \texttt{AMZN} from
-\texttt{"2026-03-25":"2026-03-27"}. We are intentionally using a small
-time range and one ticker in order to minimize runtime and memory
-requirements while we develop the methodology we need. Through the end
-of the project, we will be adding multiple assets spanning the
-large/small market cap and tick-size range to explore how different
-assets require different execution strategies.
-
-Mechanically, we have written a simple \texttt{MBP10DataAdapter} class
-that uses a hierarchical cacheing structure. This allows us to fetch
-data from Databento only when absolutely necessary, which minimizes cost
-and tiem spent downloading data. The adapter caches on
+We fetch data through a simple \texttt{MBP10DataAdapter} class that uses
+a hierarchical caching structure. This allows us to call the Databento
+API only when necessary, which is necessary for L2 book data. The
+adapter caches on
 \texttt{{[}tickers,\ start,\ end,\ dataset,\ schema{]}}. Here, our
 schema is always \texttt{MBP-10} and we use the \texttt{XNAS.ITCH}
-Dataset which gives us access to only the Nasdaq exchange.
+Dataset which gives us full access to the Nasdaq exchange.
 
-\section{Findings}\label{findings}
+We use L2 data for \texttt{AMZN} from
+\texttt{"2026-03-25":"2026-03-27"}. We are intentionally using a small
+time range and a single large-cap-small-tick stock in order to minimize
+runtime and memory requirements and maximize order book liquidity while
+we develop the simulator and strategies. Through the end of the project,
+we will add multiple assets spanning the large/small market cap and
+tick-size range to explore how different assets require different
+execution strategies.
+
+\section{Markout Plots}\label{markout-plots}
+
+The execution strategy we are building toward uses OBI to determine
+``good'' or ``bad'' times to fill, and only fills at ``good'' times.
+However, first we need to explore how well OBI can separate the ``good''
+and ``bad'' times to fill. We define order book imbalance (OBI) as: \[
+\begin{split}
+OBI = \frac{Q_{bid} - Q_{ask}}{Q_{bid} + Q_{ask}}\in [-1, 1]
+\end{split}
+\]
+
+OBI ranges from \([-1,1]\) and is known to be a good structural
+predictor of subsequent short-horizon returns. By capturing the relative
+quantity at the best bid and ask, OBI indicates which level will likely
+deplete fastest as aggressive orders arrive. To explore OBI's predictive
+power, we use markout plots. For each of five ranges of OBI values, we
+sample 100,000 start times and calculate the difference between the
+initial mid-price and the mid-price at 10,000 subsequent times, then
+average over each of the 100,000 paths. We use a time horizon of
+\([0,10]\) seconds, in milliseconds.
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=0.7\linewidth,height=\textheight,keepaspectratio]{plots/obi_markout.png}
+
+}
+
+\caption{10s Markout Plot}
+
+\end{figure}%
+
+We can clearly see that OBI is a good predictor of price direction
+within a few milliseconds and that this price motion is structural,
+indicated by the length of time that the prices take to revert. In fact,
+for \(|OBI| \in [0.5, 1]\) the price does not on average revert. This
+gives good grounding for OBI's use in our execution strategy.
+
+\section{Execution Simulator}\label{execution-simulator}
+
+Our final goal for the milestone is to have built an
+\texttt{ExecutionSimulator} class which can:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  Simulate the execution of market orders and immediate-or-cancel (IOC)
+  limit orders at a given nanosecond timestamp and latency.
+\item
+  Maintain an orderbook state over time, using L2 data from the
+  \texttt{MBP10DataAdapter}, consistent with mutations of the book
+  caused by simulated fills and the replenishment of the book via a
+  Poisson process.
+\item
+  Simulate three filling strategies of a large parent
+  order(Q\textgreater10,000):
+
+  \begin{enumerate}
+  \def\labelenumii{\arabic{enumii}.}
+  \tightlist
+  \item
+    Immediate/Naive: Attempt to fill the entire large order at once,
+    sweeping all 10 levels.
+  \item
+    Constant Rate Naive: Split the parent into \(n\) chunks of size
+    \(q/n\) and execute them \(\delta t\) seconds apart, at a constant
+    rate.
+  \item
+    OBI-Aware: Fill child orders of quantity \texttt{max\_size} only
+    when \(|OBI| > threshold\) (positive for buys, negative for sells).
+    This ensures the child orders fill only when the price is at a local
+    minimum (buys) or maxiumum (sells).
+  \end{enumerate}
+\end{enumerate}
+
+To achieve these goals we wrote the \texttt{ExecutionSimulator} class
+which initiates the L2 book with a \texttt{polars} dataframe in
+Databento's \texttt{MBP-10} schema. The simulator maintains the book
+using internally consistent \texttt{numpy} arrays, which it updates as
+the book changes with after simulated fills. At the end of a simulation
+it returns a new \texttt{polars} dataframe representing the mutated book
+over time, as well as a dictionary of the form below. Note that
+\texttt{arrival\_cost} is calculated as the \texttt{vwap} minus the mid
+price at execution.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{my\_dict }\OperatorTok{=}\NormalTok{ \{}\StringTok{\textquotesingle{}vwap\textquotesingle{}}\NormalTok{: }\FloatTok{211.9365352112676}\NormalTok{,}
+ \StringTok{\textquotesingle{}fills\textquotesingle{}}\NormalTok{: [(}\FloatTok{211.93}\NormalTok{, }\DecValTok{246}\NormalTok{), (}\FloatTok{211.94}\NormalTok{, }\DecValTok{464}\NormalTok{)],}
+ \StringTok{\textquotesingle{}total\_filled\textquotesingle{}}\NormalTok{: }\DecValTok{710}\NormalTok{,}
+ \StringTok{\textquotesingle{}levels\_swept\textquotesingle{}}\NormalTok{: }\DecValTok{1}\NormalTok{,}
+ \StringTok{\textquotesingle{}executed\_at\_ns\textquotesingle{}}\NormalTok{: }\DecValTok{1774538471626080001}\NormalTok{,}
+ \StringTok{\textquotesingle{}executed\_at\_idx\textquotesingle{}}\NormalTok{: }\DecValTok{4078073}\NormalTok{,}
+ \StringTok{\textquotesingle{}arrival\_cost\textquotesingle{}}\NormalTok{: }\FloatTok{0.02153521126757596}\NormalTok{\}}
+\end{Highlighting}
+\end{Shaded}
+
+\subsection{Validation via Latency and
+Replenishment}\label{validation-via-latency-and-replenishment}
+
+To verify that the \texttt{ExecutionSimulator} works as expected, we run
+the constant fill strategy with different latencies and replenishment
+rates. The results below verify that lower latency and higher
+replenishment rate results in less impact and better fills, and vice
+versa, as expected.
+
+\begin{verbatim}
+==============================
+Latency (ms): 0.0
+Poisson Replenishment Rate: 100
+Mean Total Cost: 0.70
+Mean Summed Arrival Cost: 0.68
+==============================
+Latency (ms): 5.0
+Poisson Replenishment Rate: 10
+Mean Total Cost: 1.96
+Mean Summed Arrival Cost: 1.75
+==============================
+Latency (ms): 10000.0
+Poisson Replenishment Rate: 0
+Mean Total Cost: 3.06
+Mean Summed Arrival Cost: 2.22
+\end{verbatim}
+
+\subsection{Initial Execution
+Comparison}\label{initial-execution-comparison}
+
+After verifying the correctness of the \texttt{ExecutionSimulator}, we
+can briefly compare strategies. Plots of these execution results can be
+found at Figure~\ref{fig-execution} in Section~\ref{sec-appendix}. All
+three strategies ran with 5ms latency, replenishment rate of
+\(\lambda = 10\), and a parent buy order for 10,000 shares. The naive
+execution could only fill 2,432/10,000 shares, and the repeated naive
+execution filled all 10,000 with a total cost of of \$2.5, calculated as
+the sum of the difference between each fill's VWAP and the mid-price at
+the time of execution, and a summed arrival cost of \$1.5. The OBI-aware
+strategy improved on this with a total cost of \$2.1 and a summed
+arrival cost of \$0.53.
 
 \section{Goals for the Future}\label{goals-for-the-future}
+
+Beyond the milestone, our main goals are to:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  Improve on the OBI-aware execution strategy by taking into account
+  other aspects of the book (trade-sign auto correlation, momentum,
+  etc.)
+\item
+  Widen the number and type of assets we use to include large and small
+  market cap and tick size stocks, and explore how each requires its own
+  tweaks on the execution strategy.
+\item
+  Add alpha forecasts, so that the execution strategy is acting on a
+  specific forecast.
+\end{enumerate}
+
+\section{Citations and Plots}\label{sec-appendix}
+
+\begin{figure}
+
+\begin{minipage}{0.50\linewidth}
+
+\centering{
+
+\pandocbounded{\includegraphics[keepaspectratio]{plots/naive_fill.png}}
+
+}
+
+\subcaption{\label{fig-immediate}Immediate Fill}
+
+\end{minipage}%
+%
+\begin{minipage}{0.50\linewidth}
+
+\centering{
+
+\pandocbounded{\includegraphics[keepaspectratio]{plots/constant_fill.png}}
+
+}
+
+\subcaption{\label{fig-constant}Constant Fills}
+
+\end{minipage}%
+\newline
+\begin{minipage}{\linewidth}
+
+\centering{
+
+\includegraphics[width=0.6\linewidth,height=\textheight,keepaspectratio]{plots/obi-aware_fill.png}
+
+}
+
+\subcaption{\label{fig-obi}OBI Aware Fills}
+
+\end{minipage}%
+
+\caption{\label{fig-execution}Comparison of Execution Strategies}
+
+\end{figure}%
+
+\subsection{References}\label{references}
+
+\begin{itemize}
+\tightlist
+\item
+  Bouchaud, J. P., Farmer, J. D., \& Lillo, F. (2009). How markets
+  slowly digest changes in supply and demand. \emph{Handbook of
+  Financial Markets}.
+\item
+  Cont, R., Kukanov, A., \& Stoikov, S. (2014). The price impact of
+  order book events. \emph{Journal of Financial Econometrics}.
+\item
+  Said, E. (2022). Market Impact: Empirical Evidence, Theory and
+  Practice. \emph{arXiv preprint}.
+\item
+  Sato, Y., \& Kanazawa, K. (2024). Online Learning of Order Flow and
+  Market Impact with Bayesian Change-Point Detection Methods.
+  \emph{arXiv preprint}.
+\item
+  Obizhaeva, A. A., \& Wang, J. (2013). Optimal trading strategy and
+  supply/demand dynamics. \emph{Journal of Financial Markets}, 16(1),
+  1--32.
+\item
+  Gârleanu, N., \& Pedersen, L. H. (2013). Dynamic trading with
+  predictable returns and transaction costs. \emph{Journal of Finance},
+  68(6), 2309--2340.
+\end{itemize}
 
 
 

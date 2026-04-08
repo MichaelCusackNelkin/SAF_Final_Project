@@ -3,20 +3,20 @@ title: "Measuring Alpha Decay: Analysis of Order Splitting via Trade Markouts"
 date: today
 date-modified: last-modified
 author:
-  - name: John Joe
+  - name: Michael Csuack-Nelkin
     corresponding: true
-    email: computo@sfds.asso.fr
-    url: https://computo.sfds.asso.fr
-    orcid: 0000-0000-0000-0000
-    affiliations:
-      - name: Texas A&M University
-        department: Electrical and Computer Engineering
-        address: College Station, TX 77843, USA
-  - name: John Joe
-  - name: John Joe
+    email: mc5882@columbia.edu
+  - name: Alick Zhou
+    email: az2960@columbia.edu
+  - name: Debby Zhao
+    email: lz3083@columbia.edu
+  - name: Michael Bakshandeh
+    email: mb5499@columbia.edu
+  - name: Vijeet Prasad
+    email: vp2580@columbia.edu
 description: |
   This document provides a template based on the quarto system for contributions to Computo. The github repository in itself provides a specific quarto extension useful for authors (and editors!).
-keywords: [template, quarto, R, Python, reproductibility]
+keywords: [template, quarto, R, Python, reproducibility]
 doi: 10.xxxx/xxx-xxx
 citation:
   type: article-journal
@@ -27,12 +27,14 @@ citation:
 google-scholar: true
 github-user: stevengogogo
 repo: "neurips-template-enhanced"
-draft: true # set to false once the build is running
-published: false # will be set to true once accepted
+draft: false # set to false once the build is running
+published: true # will be set to true once accepted
 format:
   neurips-pdf: 
+    final: true
     keep-tex: true
-  neurips-html: default
+  neurips-html:
+    final: true
 ---
 
 # Abstract
