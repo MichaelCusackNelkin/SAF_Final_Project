@@ -7,75 +7,6 @@ import pandas as pd
 import databento as db
 import polars as pl
 
-class InvalidOrderBookError(Exception):
-    def __init__(self, message):
-        super().__init__(message)
-
-class L2Book:
-    """
-    Class instantiation of a snapshot of an L2 orderbook at a signle point in time.
-    """
-    def __init__(self, snapshot_df):
-        # --- Check Book Validity ---
-        df_invalid = snapshot_df.filter(pl.col('ask_px') < pl.col("bid_px"))
-        ask_greater_than_bid = df_invalid.shape[0] != 0
-        if ask_greater_than_bid:
-            raise InvalidOrderBookError(f"Ask greater than bid at level(s) {df_invalid['level'].to_list()}")
-        # Only levels with non-zero size and non-zero prices
-        snapshot_df = snapshot_df.filter(
-            pl.col('ask_size') > 0,
-            pl.col('bid_size') > 0,
-            pl.col('ask_px') > 0,
-            pl.col('bid_px') > 0
-        )
-        
-        # --- Build Orderbook Snapshot ---
-        self.bids = [(row['bid_px'], row['bid_size']) for row in snapshot_df.sort('level').iter_rows(named=True)]
-        self.asks = [(row['ask_px'], row['ask_size']) for row in snapshot_df.sort('level').iter_rows(named=True)]
-    
-    def __str__(self):
-        return f"Asks: {self.asks} \nBids: {self.bids}"
-    
-    def accept_mkt_order(self, side, order_size):
-        if side == "BUY":
-            book_temp = self.asks
-        if side == "SELL":
-            book_temp = self.bids
-        
-        volume_weighted_fills = []
-        size_remaining = order_size
-        levels_swept = 0
-        for level, idx in zip(book_temp, range(len(book_temp))):
-            level_px = level[0]
-            level_size = level[1]
-
-            # Filling Logic
-            if size_remaining < level_size:
-                volume_weighted_fills.append(size_remaining * level_px)
-                book_temp[idx] = (level_px, level_size - size_remaining)
-                size_remaining = 0
-            elif size_remaining == level_size:
-                volume_weighted_fills.append(size_remaining * level_px)
-                book_temp[idx] = (level_px, level_size - size_remaining)
-                size_remaining = 0
-                levels_swept +=1
-            elif size_remaining > level_size:
-                volume_weighted_fills.append(level_size * level_px)
-                size_remaining -= level_size
-                levels_swept += 1            
-            if size_remaining == 0:
-                break
-
-        # Remove swepts levels and re-assign    
-        del book_temp[0:levels_swept]
-
-        if side == "BUY":
-            self.asks = book_temp
-        if side == "SELL":
-            self.bids = book_temp
-
-        return sum(volume_weighted_fills) / order_size
-
 class ExecutionSimulator:
     """
     Replay-driven execution simulator that walks a time-sorted L2 orderbook
@@ -636,6 +567,7 @@ class ExecutionSimulator:
         max_size: int,
         threshold: float,
         horizon: int,
+        limit_price: float | None = None,
     ) -> tuple[list[dict], pl.DataFrame, pl.DataFrame]:
         """
         Adaptively fill a parent order using order-book imbalance (OBI).
@@ -659,6 +591,10 @@ class ExecutionSimulator:
             Nanosecond timestamp at which to begin scanning.
         horizon : int
             Nanosecond look-ahead window for candidate selection.
+        limit_price : float or None, optional
+            Fixed limit price for all child orders.  When ``None`` (default),
+            the limit is computed dynamically from each candidate row using
+            ``ask_px_02`` (BUY) or ``bid_px_02`` (SELL).
 
         Returns
         -------
@@ -673,11 +609,7 @@ class ExecutionSimulator:
         book_df = self.get_book_df()
         candidates = pl.DataFrame()
 
-        # Fix limit price at initialization time to avoid lookahead
-        init_row = book_df.filter(pl.col("ts_event_nano") >= init_ts_ns).row(0, named=True)
-        limit = init_row["ask_px_03"] if side == "BUY" else init_row["bid_px_03"]
-
-        while remaining > 0 or start_ts_ns < horizon + init_ts_ns:
+        while remaining > 0 and start_ts_ns < horizon + init_ts_ns:
             candidates = (
                 book_df
                 .filter(
@@ -714,6 +646,11 @@ class ExecutionSimulator:
 
             if size <= 0:
                 break
+
+            if limit_price is not None:
+                limit = limit_price
+            else:
+                limit = row["ask_px_02"] if side == "BUY" else row["bid_px_02"]
 
             r = self.accept_ioc_lmt_order(side, limit, size, row["ts_event_nano"])
             remaining -= r["total_filled"]
