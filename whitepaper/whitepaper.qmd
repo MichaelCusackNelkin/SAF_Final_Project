@@ -1,0 +1,49 @@
+---
+title: "Comparing the Impact and Arrival Cost of Naive and OBI-Enhanced Order Splitting Strategies"
+date: today
+date-modified: last-modified
+author:
+  - name: Michael Cusack-Nelkin
+    corresponding: true
+    email: mc5882@columbia.edu
+  - name: Alick Zhou
+    email: az2960@columbia.edu
+  - name: Debby Zhao
+    email: lz3083@columbia.edu
+  - name: Michael Bakshandeh
+    email: mb5499@columbia.edu
+  - name: Vijeet Prasad
+    email: vp2580@columbia.edu
+description: |
+  This document constitutes the authors' final project whitepaper for the Columbia Mathematics of Finance course Statistical Aspects of Finance during the Spring 2026 semester.
+keywords: [optimal, execution, order, splitting, imbalance]
+citation:
+  type: article-journal
+  container-title: "Computo"
+  url: "https://github.com/MichaelCusackNelkin/SAF_Final_Project/whitepaper/whitepaper.pdf"
+  issn: "2824-7795"
+google-scholar: true
+github-user: MichaelCusackNelkin
+repo: "SAF_Final_Project"
+draft: false # set to false once the build is running
+published: true # will be set to true once accepted
+format:
+  neurips-pdf: 
+    final: true
+    keep-tex: true
+  neurips-html:
+    final: true
+---
+
+
+# Abstract
+
+# Motivation and Main Ideas
+
+# Empirical Findings
+
+# Methodological Choices and Innovations
+
+# Theoretical Justifications
+
+# relationship to Prior Work
