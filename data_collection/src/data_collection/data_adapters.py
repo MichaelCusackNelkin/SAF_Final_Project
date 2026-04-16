@@ -101,8 +101,12 @@ class DatabentoGenericAdapter(DataAdapter):
         If True, print status messages during download.
     """
 
-    def __init__(self, api_key: str, cache_dir: str = "data/dbn_cache/generic",
+    _REPO_ROOT = Path(__file__).resolve().parents[3]
+
+    def __init__(self, api_key: str, cache_dir: Optional[str] = None,
                  verbose: bool = True) -> None:
+        if cache_dir is None:
+            cache_dir = str(self._REPO_ROOT / "data/dbn_cache/generic")
         super().__init__(cache_dir)
         self.api_key = api_key
         self.verbose = verbose

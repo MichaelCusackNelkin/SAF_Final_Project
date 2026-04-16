@@ -15,7 +15,7 @@ class ExecutionSimulator:
     Parameters
     ----------
     df : pl.DataFrame
-        Polars DataFrame with columns ``ts_event_nano``, ``instrument_id``,
+        Polars DataFrame with columns ``ts_nano``, ``instrument_id``,
         and 10 levels of ``bid_px_XX``, ``ask_px_XX``, ``bid_sz_XX``,
         ``ask_sz_XX`` (XX = 00..09).
     replenishment_rate : float
@@ -30,10 +30,10 @@ class ExecutionSimulator:
     _N_LEVELS: int = 10
 
     def __init__(self, df: pl.DataFrame, replenishment_rate: float = 0.0, latency_ns: int = 0) -> None:
-        df = df.sort("ts_event_nano")
+        df = df.sort("ts_nano")
 
         # Extract numpy arrays for fast row-level access (writable copies).
-        self.ts_ns: np.ndarray = df["ts_event_nano"].to_numpy().copy()
+        self.ts_ns: np.ndarray = df["ts_nano"].to_numpy().copy()
         self.instrument_id: np.ndarray = df["instrument_id"].to_numpy().copy()
 
         lvls = [f"{i:02d}" for i in range(self._N_LEVELS)]
@@ -266,7 +266,7 @@ class ExecutionSimulator:
 
     def advance_to(self, ts_nano: int) -> None:
         """
-        Advance the simulator to the last snapshot with ``ts_event_nano <= ts_nano``.
+        Advance the simulator to the last snapshot with ``ts_nano <= ts_nano``.
 
         The internal book state is replaced by the market snapshot at that
         point in time, discarding any prior simulated modifications.
@@ -311,7 +311,7 @@ class ExecutionSimulator:
             ``fills`` — list of ``(price, qty_filled)`` tuples.
             ``total_filled`` — total shares filled (may be < *order_size*).
             ``levels_swept`` — number of levels fully consumed.
-            ``executed_at_ns`` — ``ts_event_nano`` of the book row the order
+            ``executed_at_ns`` — ``ts_nano`` of the book row the order
             executed against.
             ``executed_at_idx`` — integer index of that row in the internal
             arrays (useful for slicing).
@@ -391,7 +391,7 @@ class ExecutionSimulator:
             ``fills`` — list of ``(price, qty_filled)`` tuples.
             ``total_filled`` — total shares filled (may be < *order_size*).
             ``levels_swept`` — number of levels fully consumed.
-            ``executed_at_ns`` — ``ts_event_nano`` of the book row the order
+            ``executed_at_ns`` — ``ts_nano`` of the book row the order
             executed against.
             ``executed_at_idx`` — integer index of that row in the internal
             arrays (useful for slicing).
@@ -613,7 +613,7 @@ class ExecutionSimulator:
             candidates = (
                 book_df
                 .filter(
-                    pl.col("ts_event_nano").is_between(start_ts_ns, start_ts_ns + horizon)
+                    pl.col("ts_nano").is_between(start_ts_ns, start_ts_ns + horizon)
                 )
                 .with_columns(
                     pl.col("bid_sz_00").fill_null(0).fill_nan(0).alias("bid_sz_00"),
@@ -652,11 +652,11 @@ class ExecutionSimulator:
             else:
                 limit = row["ask_px_02"] if side == "BUY" else row["bid_px_02"]
 
-            r = self.accept_ioc_lmt_order(side, limit, size, row["ts_event_nano"])
+            r = self.accept_ioc_lmt_order(side, limit, size, row["ts_nano"])
             remaining -= r["total_filled"]
             results.append(r)
 
-            start_ts_ns = row["ts_event_nano"] + 1
+            start_ts_ns = row["ts_nano"] + 1
             book_df = self.get_book_df()
 
         return results, self.get_book_df(), candidates
@@ -705,11 +705,11 @@ class ExecutionSimulator:
         Returns
         -------
         pl.DataFrame
-            DataFrame with ``ts_event_nano``, ``instrument_id``, and 10 levels
+            DataFrame with ``ts_nano``, ``instrument_id``, and 10 levels
             of ``bid_px_XX``, ``ask_px_XX``, ``bid_sz_XX``, ``ask_sz_XX``.
         """
         data: dict[str, np.ndarray] = {
-            "ts_event_nano": self.ts_ns,
+            "ts_nano": self.ts_ns,
             "instrument_id": self.instrument_id,
         }
         for l in range(self._N_LEVELS):
