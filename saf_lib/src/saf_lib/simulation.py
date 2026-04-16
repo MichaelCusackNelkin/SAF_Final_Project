@@ -34,7 +34,10 @@ class ExecutionSimulator:
 
         # Extract numpy arrays for fast row-level access (writable copies).
         self.ts_ns: np.ndarray = df["ts_nano"].to_numpy().copy()
+        self.ts_event: np.ndarray = df["ts_event"].to_numpy().copy() if "ts_event" in df.columns else np.zeros(len(df), dtype=np.int64)
         self.instrument_id: np.ndarray = df["instrument_id"].to_numpy().copy()
+        self.action: np.ndarray = df["action"].to_numpy().copy() if "action" in df.columns else np.full(len(df), None, dtype=object)
+        self.size: np.ndarray = df["size"].to_numpy().copy().astype(np.float64) if "size" in df.columns else np.zeros(len(df), dtype=np.float64)
 
         lvls = [f"{i:02d}" for i in range(self._N_LEVELS)]
         self.bid_px: np.ndarray = df.select([f"bid_px_{l}" for l in lvls]).to_numpy().copy().astype(np.float64)
@@ -568,6 +571,8 @@ class ExecutionSimulator:
         threshold: float,
         horizon: int,
         limit_price: float | None = None,
+        min_interval_ns: int = 0,
+        min_shares_between: int = 0,
     ) -> tuple[list[dict], pl.DataFrame, pl.DataFrame]:
         """
         Adaptively fill a parent order using order-book imbalance (OBI).
@@ -606,15 +611,11 @@ class ExecutionSimulator:
         init_ts_ns = start_ts_ns
         results: list[dict] = []
         remaining = parent_size
-        book_df = self.get_book_df()
         candidates = pl.DataFrame()
 
         while remaining > 0 and start_ts_ns < horizon + init_ts_ns:
             candidates = (
-                book_df
-                .filter(
-                    pl.col("ts_nano").is_between(start_ts_ns, start_ts_ns + horizon)
-                )
+                self._get_window_df(start_ts_ns, start_ts_ns + horizon, side)
                 .with_columns(
                     pl.col("bid_sz_00").fill_null(0).fill_nan(0).alias("bid_sz_00"),
                     pl.col("ask_sz_00").fill_null(0).fill_nan(0).alias("ask_sz_00"),
@@ -623,7 +624,7 @@ class ExecutionSimulator:
                     (
                         (pl.col("bid_sz_00").cast(pl.Int32) - pl.col("ask_sz_00").cast(pl.Int32))
                         / (pl.col("bid_sz_00").cast(pl.Int32) + pl.col("ask_sz_00").cast(pl.Int32))
-                    ).alias("obi")
+                    ).fill_nan(0).clip(-1, 1).alias("obi")
                 )
                 .with_columns(
                     (pl.col("obi").abs() * max_size)
@@ -656,8 +657,35 @@ class ExecutionSimulator:
             remaining -= r["total_filled"]
             results.append(r)
 
-            start_ts_ns = row["ts_nano"] + 1
-            book_df = self.get_book_df()
+            last_order_ts = row["ts_nano"]
+            time_gate_ts = last_order_ts + max(1, min_interval_ns)
+
+            if min_shares_between > 0:
+                lo = int(np.searchsorted(self.ts_ns, last_order_ts, side="right"))
+                future = pl.DataFrame({
+                    "ts_nano": self.ts_ns[lo:],
+                    "action": self.action[lo:],
+                    "size": self.size[lo:],
+                })
+                cum_trade_vol = (
+                    future
+                    .select(
+                        pl.when(pl.col("action") == "T")
+                        .then(pl.col("size").fill_null(0))
+                        .otherwise(0)
+                        .cum_sum()
+                        .alias("cum_vol")
+                    )
+                    .to_series()
+                )
+                gate_rows = (cum_trade_vol >= min_shares_between).arg_true()
+                shares_gate_ts = (
+                    int(future["ts_nano"][gate_rows[0]]) if len(gate_rows) > 0
+                    else time_gate_ts
+                )
+                start_ts_ns = min(time_gate_ts, shares_gate_ts)
+            else:
+                start_ts_ns = time_gate_ts
 
         return results, self.get_book_df(), candidates
 
@@ -695,6 +723,26 @@ class ExecutionSimulator:
             return None
         return (self.bids[0][0] + self.asks[0][0]) / 2.0
 
+    def _get_window_df(self, start_ts_ns: int, end_ts_ns: int, side: str) -> pl.DataFrame:
+        lo = int(np.searchsorted(self.ts_ns, start_ts_ns, side="left"))
+        hi = int(np.searchsorted(self.ts_ns, end_ts_ns, side="right"))
+        px_col = "ask_px_02" if side == "BUY" else "bid_px_02"
+        px_level = 2
+        if lo >= hi:
+            return pl.DataFrame({
+                "ts_nano": np.empty(0, dtype=self.ts_ns.dtype),
+                "bid_sz_00": np.empty(0, dtype=self.bid_sz.dtype),
+                "ask_sz_00": np.empty(0, dtype=self.ask_sz.dtype),
+                px_col: np.empty(0, dtype=self.ask_px.dtype),
+            })
+        sl = slice(lo, hi)
+        return pl.DataFrame({
+            "ts_nano": self.ts_ns[sl],
+            "bid_sz_00": self.bid_sz[sl, 0].copy(),
+            "ask_sz_00": self.ask_sz[sl, 0].copy(),
+            px_col: (self.ask_px[sl, px_level].copy() if side == "BUY" else self.bid_px[sl, px_level].copy()),
+        })
+
     def get_book_df(self) -> pl.DataFrame:
         """
         Return the full orderbook across all timestamps as a Polars DataFrame.
@@ -710,7 +758,10 @@ class ExecutionSimulator:
         """
         data: dict[str, np.ndarray] = {
             "ts_nano": self.ts_ns,
+            "ts_event": self.ts_event,
             "instrument_id": self.instrument_id,
+            "action": self.action,
+            "size": self.size,
         }
         for l in range(self._N_LEVELS):
             tag = f"{l:02d}"
@@ -719,4 +770,44 @@ class ExecutionSimulator:
             data[f"bid_sz_{tag}"] = self.bid_sz[:, l]
             data[f"ask_sz_{tag}"] = self.ask_sz[:, l]
         return pl.DataFrame(data)
+
+
+
+import random
+
+_worker_df = None
+
+def init_worker(df):
+    global _worker_df
+    _worker_df = df
+
+def run_trial(args):
+    latency, replenishment, parent_qty, threshold, horizon, min_ns, min_shares, wait_ns, n_chunks, method = args
+    sim = ExecutionSimulator(_worker_df, latency_ns=latency, replenishment_rate=replenishment)
+    side = random.choice(["BUY", "SELL"])
+    ts = _worker_df.sample()["ts_nano"].item()
+    lmt = _worker_df.filter(pl.col("ts_nano") == ts)["ask_px_03" if side == "BUY" else "bid_px_03"][0]
+    if method=="OBI":
+        results, _, _ = sim.obi_adaptive_fill(
+            side, parent_qty, ts, limit_price=lmt,
+            max_size=500, threshold=threshold, horizon=horizon,
+            min_interval_ns=min_ns, min_shares_between=min_shares,
+        )
+    elif method=="constant":
+        results, new_df = sim.constant_fill("BUY", parent_qty, ts, wait_ns=wait_ns, n_chunks=n_chunks)
+    filled_results = [r for r in results if r["vwap"] != 0.0]
+    if not filled_results:
+        return None
+    p0 = _worker_df.filter(pl.col("ts_nano") == ts)["mid"][0]
+    total_filled = np.sum([r["total_filled"] for r in filled_results])
+    total_vwap = np.sum([r["vwap"] * r["total_filled"] for r in filled_results]) / total_filled
+    mean_child_arrival_cost = np.mean([r["arrival_cost"] for r in filled_results]) * 10_000
+    median_child_arrival_cost = np.median([r["arrival_cost"] for r in filled_results]) * 10_000
+    return {
+        "side": side,
+        "filled": total_filled,
+        "total_arrival_cost": (total_vwap - p0) * 10_000 if side == "BUY" else (p0 - total_vwap) * 10_000,
+        "mean_arrival_cost": mean_child_arrival_cost,
+        "median_arrival_cost": median_child_arrival_cost,
+    }
 

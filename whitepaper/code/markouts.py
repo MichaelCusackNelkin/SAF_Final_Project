@@ -1,6 +1,4 @@
 import sys, os
-# sys.path.insert(0, '../..')
-
 from data_collection.data_adapters import DatabentoGenericAdapter
 from dotenv import load_dotenv
 import matplotlib.pyplot as plt
@@ -40,7 +38,7 @@ if __name__ == "__main__":
     df = df.select(cols)
 
     # Compute markouts at multiple horizons (sampled for efficiency)
-    horizon_ns = np.arange(0, 500_000, 1_000) # 0 to 500us in steps of 1us
+    horizon_ns = np.arange(0, 500_000, 1_000) # 0 to 500us (0.5ms) in steps of 1us
     markouts = compute_markouts(df, horizons_ns=horizon_ns, sample_n=100_000, seed=SEED)
     print(f"Computed markouts for {len(markouts):,} sampled ticks")
 
