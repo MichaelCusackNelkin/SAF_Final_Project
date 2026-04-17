@@ -782,31 +782,34 @@ def init_worker(df):
     _worker_df = df
 
 def run_trial(args):
-    latency, replenishment, parent_qty, threshold, horizon, min_ns, min_shares, wait_ns, n_chunks, method = args
+    latency, replenishment, parent_qty, depth_lmt, threshold, horizon, min_ns, min_shares, max_size, wait_ns, n_chunks, method = args
     sim = ExecutionSimulator(_worker_df, latency_ns=latency, replenishment_rate=replenishment)
     side = random.choice(["BUY", "SELL"])
     ts = _worker_df.sample()["ts_nano"].item()
-    lmt = _worker_df.filter(pl.col("ts_nano") == ts)["ask_px_03" if side == "BUY" else "bid_px_03"][0]
+    lmt = _worker_df.filter(pl.col("ts_nano") == ts)[f"ask_px_{depth_lmt}" if side == "BUY" else f"bid_px_{depth_lmt}"][0]
     if method=="OBI":
         results, _, _ = sim.obi_adaptive_fill(
             side, parent_qty, ts, limit_price=lmt,
-            max_size=500, threshold=threshold, horizon=horizon,
+            max_size=max_size, threshold=threshold, horizon=horizon,
             min_interval_ns=min_ns, min_shares_between=min_shares,
         )
     elif method=="constant":
-        results, new_df = sim.constant_fill("BUY", parent_qty, ts, wait_ns=wait_ns, n_chunks=n_chunks)
+        results, new_df = sim.constant_ioc_fill(side,lmt, parent_qty, ts, wait_ns=wait_ns, n_chunks=n_chunks)
     filled_results = [r for r in results if r["vwap"] != 0.0]
     if not filled_results:
         return None
     p0 = _worker_df.filter(pl.col("ts_nano") == ts)["mid"][0]
     total_filled = np.sum([r["total_filled"] for r in filled_results])
     total_vwap = np.sum([r["vwap"] * r["total_filled"] for r in filled_results]) / total_filled
-    mean_child_arrival_cost = np.mean([r["arrival_cost"] for r in filled_results]) * 10_000
-    median_child_arrival_cost = np.median([r["arrival_cost"] for r in filled_results]) * 10_000
+    mean_child_arrival_cost = np.mean([r["arrival_cost"] / r["total_filled"] for r in filled_results]) * 10_000
+    median_child_arrival_cost = np.median([r["arrival_cost"] / r["total_filled"] for r in filled_results]) * 10_000
+    fill_times = np.diff([r["executed_at_ns"] for r in filled_results])
+    total_arrival_cost = (total_vwap - p0) / p0 * 10_000 if side == "BUY" else (p0 - total_vwap) / p0 * 10_000
     return {
         "side": side,
         "filled": total_filled,
-        "total_arrival_cost": (total_vwap - p0) * 10_000 if side == "BUY" else (p0 - total_vwap) * 10_000,
+        "fill_time": fill_times,
+        "total_arrival_cost": total_arrival_cost,
         "mean_arrival_cost": mean_child_arrival_cost,
         "median_arrival_cost": median_child_arrival_cost,
     }
