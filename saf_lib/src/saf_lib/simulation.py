@@ -437,7 +437,7 @@ class ExecutionSimulator:
         )
 
         if mid is not None and total_filled > 0:
-            arrival_cost = vwap - mid if side == "BUY" else mid - vwap
+            arrival_cost = (vwap - mid) / mid if side == "BUY" else (mid - vwap) / mid
         else:
             arrival_cost = None
 
@@ -798,19 +798,24 @@ def run_trial(args):
     filled_results = [r for r in results if r["vwap"] != 0.0]
     if not filled_results:
         return None
+    
+    # -- Return dict --
     p0 = _worker_df.filter(pl.col("ts_nano") == ts)["mid"][0]
-    total_filled = np.sum([r["total_filled"] for r in filled_results])
-    total_vwap = np.sum([r["vwap"] * r["total_filled"] for r in filled_results]) / total_filled
-    mean_child_arrival_cost = np.mean([r["arrival_cost"] / r["total_filled"] for r in filled_results]) * 10_000
-    median_child_arrival_cost = np.median([r["arrival_cost"] / r["total_filled"] for r in filled_results]) * 10_000
-    fill_times = np.diff([r["executed_at_ns"] for r in filled_results])
-    total_arrival_cost = (total_vwap - p0) / p0 * 10_000 if side == "BUY" else (p0 - total_vwap) / p0 * 10_000
+
+    mean_child_arrival_cost = np.mean([r["arrival_cost"] for r in filled_results]) * 10_000
+    median_child_arrival_cost = np.median([r["arrival_cost"] for r in filled_results]) * 10_000
+    child_fill_times = np.diff([r["executed_at_ns"] for r in filled_results])
+
+    parent_filled = np.sum([r["total_filled"] for r in filled_results])
+    parent_vwap = np.sum([r["vwap"] * r["total_filled"] for r in filled_results]) / parent_filled
+    parent_arrival_cost = (parent_vwap - p0) / p0 * 10_000 if side == "BUY" else (p0 - parent_vwap) / p0 * 10_000
+
     return {
         "side": side,
-        "filled": total_filled,
-        "fill_time": fill_times,
-        "total_arrival_cost": total_arrival_cost,
-        "mean_arrival_cost": mean_child_arrival_cost,
-        "median_arrival_cost": median_child_arrival_cost,
+        "parent_filled": parent_filled,
+        "child_fill_times": child_fill_times,
+        "parent_arrival_cost": parent_arrival_cost,
+        "mean_child_arrival_cost": mean_child_arrival_cost,
+        "median_child_arrival_cost": median_child_arrival_cost,
     }
 
