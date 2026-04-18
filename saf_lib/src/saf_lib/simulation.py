@@ -524,7 +524,7 @@ class ExecutionSimulator:
     def constant_ioc_fill(
         self,
         side: str,
-        limit_px: float,
+        limit_px: float | None,
         parent_size: int,
         start_ts_ns: int,
         wait_ns: int,
@@ -537,8 +537,10 @@ class ExecutionSimulator:
         ----------
         side : str
             ``"BUY"`` or ``"SELL"``.
-        limit_px : float
-            Limit price for every child IOC order.
+        limit_px : float or None
+            Limit price for every child IOC order.  When ``None``, the limit
+            is resolved dynamically from each book snapshot using
+            ``ask_px_02`` (BUY) or ``bid_px_02`` (SELL).
         parent_size : int
             Total number of shares to fill.
         start_ts_ns : int
@@ -554,11 +556,16 @@ class ExecutionSimulator:
             List of execution result dicts and the post-execution book
             DataFrame.
         """
-        chunk_size = int(parent_size / n_chunks)
+        chunk_size = parent_size // n_chunks
         timestamps = np.arange(start_ts_ns, start_ts_ns + n_chunks * wait_ns, wait_ns)
         results: list[dict] = []
-        for t in timestamps:
-            r = self.accept_ioc_lmt_order(side, limit_px, chunk_size, int(t))
+
+        for i, t in enumerate(timestamps):
+            size = parent_size - (n_chunks - 1) * chunk_size if i == n_chunks - 1 else chunk_size
+            if limit_px is None:
+                r = self.accept_mkt_order(side, size, int(t))
+            else:
+                r = self.accept_ioc_lmt_order(side, limit_px, size, int(t))
             results.append(r)
         return results, self.get_book_df()
 
@@ -609,13 +616,14 @@ class ExecutionSimulator:
             candidates DataFrame from the last iteration.
         """
         init_ts_ns = start_ts_ns
+        deadline = init_ts_ns + horizon
         results: list[dict] = []
         remaining = parent_size
         candidates = pl.DataFrame()
 
-        while remaining > 0 and start_ts_ns < horizon + init_ts_ns:
+        while remaining > 0 and start_ts_ns < deadline:
             candidates = (
-                self._get_window_df(start_ts_ns, start_ts_ns + horizon, side)
+                self._get_window_df(start_ts_ns, deadline, side)
                 .with_columns(
                     pl.col("bid_sz_00").fill_null(0).fill_nan(0).alias("bid_sz_00"),
                     pl.col("ask_sz_00").fill_null(0).fill_nan(0).alias("ask_sz_00"),
@@ -627,9 +635,10 @@ class ExecutionSimulator:
                     ).fill_nan(0).clip(-1, 1).alias("obi")
                 )
                 .with_columns(
-                    (pl.col("obi").abs() * max_size)
-                    .clip(1, None)
-                    .cast(pl.Int64)
+                    #(pl.col("obi").abs() * max_size)
+                    pl.lit(max_size)
+                    #.clip(1, None)
+                    #.cast(pl.Int64)
                     .alias("order_size")
                 )
             )
@@ -648,12 +657,10 @@ class ExecutionSimulator:
             if size <= 0:
                 break
 
-            if limit_price is not None:
-                limit = limit_price
+            if limit_price is None:
+                r = self.accept_mkt_order(side, size, row["ts_nano"])
             else:
-                limit = row["ask_px_02"] if side == "BUY" else row["bid_px_02"]
-
-            r = self.accept_ioc_lmt_order(side, limit, size, row["ts_nano"])
+                r = self.accept_ioc_lmt_order(side, limit_price, size, row["ts_nano"])
             remaining -= r["total_filled"]
             results.append(r)
 
@@ -786,7 +793,10 @@ def run_trial(args):
     sim = ExecutionSimulator(_worker_df, latency_ns=latency, replenishment_rate=replenishment)
     side = random.choice(["BUY", "SELL"])
     ts = _worker_df.sample()["ts_nano"].item()
-    lmt = _worker_df.filter(pl.col("ts_nano") == ts)[f"ask_px_{depth_lmt}" if side == "BUY" else f"bid_px_{depth_lmt}"][0]
+    if depth_lmt != None:
+        lmt = _worker_df.filter(pl.col("ts_nano") == ts)[f"ask_px_{depth_lmt}" if side == "BUY" else f"bid_px_{depth_lmt}"][0]
+    else:
+        lmt = depth_lmt
     if method=="OBI":
         results, _, _ = sim.obi_adaptive_fill(
             side, parent_qty, ts, limit_price=lmt,
@@ -794,7 +804,7 @@ def run_trial(args):
             min_interval_ns=min_ns, min_shares_between=min_shares,
         )
     elif method=="constant":
-        results, new_df = sim.constant_ioc_fill(side,lmt, parent_qty, ts, wait_ns=wait_ns, n_chunks=n_chunks)
+        results, _ = sim.constant_ioc_fill(side, lmt, parent_qty, ts, wait_ns=wait_ns, n_chunks=n_chunks)
     filled_results = [r for r in results if r["vwap"] != 0.0]
     if not filled_results:
         return None

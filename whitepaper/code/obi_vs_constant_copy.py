@@ -82,7 +82,6 @@ def _trial_cache_key(
     serialized = json.dumps(payload, sort_keys=True, default=str)
     return hashlib.md5(serialized.encode("utf-8")).hexdigest()
 
-
 def load_or_run(
     method: str,
     trial_args: list,
@@ -162,8 +161,6 @@ async def get_data() -> pl.DataFrame:
     map = {v: k for k,v in map.items()}
     return df, map
 
-
-
 if __name__ == "__main__":
     import asyncio
     import numpy as np
@@ -172,20 +169,20 @@ if __name__ == "__main__":
     from saf_lib.simulation import *
 
     # -- General Params --
-    TICKER = "AMZN"
+    TICKER = "DRH"
     LATENCY = 100 * 1e3                 #100us, ns
-    REPLENISHMENT = 10.0                #poisson rate of replenishment using wall-clock
+    REPLENISHMENT = 30.0                #poisson rate of replenishment using wall-clock
     PARENT_QTY = 5_000
-    DEPTH_LMT = "03"
-    N_TRIALS = 10
-    MAX_WORKERS = 5
+    DEPTH_LMT = None                    # None or "0X" for the Xth level deep into the book at parent order time.
+    MAX_WORKERS = 10
+    N_TRIALS = 1000
 
     # -- OBI Params --
-    MIN_NS = 100 * 1e6                  #100ms, waiting time between fills for OBI filler, ns
+    MIN_NS = 0 * 1e6                    #1ms, waiting time between fills for OBI filler, ns
     MIN_SHARES = 0                      # waiting time in shares traded between fills for OBI filler
-    THRESHOLD = 0.90                    # OBI threshold for entry, +- for buys and sells
-    HORIZON = 120 * 1e9                  # HALF-HORIZON 30s, allowed trading horizon, ns
-    MAX_SIZE = 500                      # Maximum child order sizes
+    THRESHOLD = 0.375                   # OBI threshold for entry, +- for buys and sells
+    HORIZON = 120 * 1e9                 # HALF-HORIZON 30s, allowed trading horizon, ns
+    MAX_SIZE = 250                      # Maximum child order sizes
 
     # -- Constant Params --
     WAIT_NS = 1e9
@@ -259,9 +256,15 @@ if __name__ == "__main__":
 
     # -- Descriptive Stats --
     print("\nOBI Fill Costs")
-    print(cost_obi.describe())
+    print(cost_obi.select(
+        ["parent_filled", "parent_arrival_cost", "mean_child_arrival_cost", "median_child_arrival_cost"]
+        ).describe()
+        )
     print("\nConstant Fill Costs")
-    print(cost_constant.describe())
+    print(cost_constant.select(
+        ["parent_filled", "parent_arrival_cost", "mean_child_arrival_cost", "median_child_arrival_cost"]
+        ).describe()
+        )
 
     #===========
     # Plotting
@@ -269,6 +272,8 @@ if __name__ == "__main__":
 
     plot_obi = cost_obi
     plot_constant = cost_constant
+    plot_pre = f"plots/"
+    plot_end = f"N.{N_TRIALS}_T.{TICKER}_D.{DEPTH_LMT}_L.{LATENCY}_R.{REPLENISHMENT}"
 
     # -- Parent Costs --
     log = True
@@ -278,7 +283,7 @@ if __name__ == "__main__":
     plt.ylabel("Count")
     plt.title("Parent Cost Per Share Comparison: OBI vs Constant IOC")
     plt.legend()
-    plt.savefig(f"plots/parent_cost_{N_TRIALS}.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{plot_pre}parent_cost_{plot_end}.png", dpi=300, bbox_inches='tight')
     plt.show()
 
     # -- Child Costs --
@@ -301,7 +306,7 @@ if __name__ == "__main__":
 
     plt.suptitle("Child Arrival Cost Per Share Comparison: OBI vs Constant IOC ")
     plt.tight_layout()
-    plt.savefig(f"plots/child_cost_{N_TRIALS}.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{plot_pre}child_cost_{plot_end}.png", dpi=300, bbox_inches='tight')
     plt.show()
 
     # -- Fills --
@@ -316,12 +321,12 @@ if __name__ == "__main__":
         weights=np.ones(len(plot_constant["parent_filled"])) / len(plot_constant["parent_filled"]),
         bins=25, edgecolor="black", color="tab:blue", alpha=0.7, label="Constant"
         )
-    plt.xlabel("Cost per Share (bps)")
+    plt.xlabel("Parent Quantity Filled")
     plt.ylabel("Percent (%)")
     plt.title("Fill Reliability Comparison: OBI vs Constant IOC")
     plt.gca().yaxis.set_major_formatter(PercentFormatter(1))
     plt.legend()
-    plt.savefig(f"plots/fill_reliability_{N_TRIALS}.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{plot_pre}fill_reliability_{plot_end}.png", dpi=300, bbox_inches='tight')
     plt.show()
 
     # -- Parent Lifetimes --
@@ -340,6 +345,5 @@ if __name__ == "__main__":
     plt.title("Parent Order Lifetime Comparison: OBI vs Constant IOC")
     plt.gca().yaxis.set_major_formatter(PercentFormatter(1))
     plt.legend()
-    plt.savefig(f"plots/parents_lifetimes_{N_TRIALS}.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{plot_pre}parent_lifetimes_{plot_end}.png", dpi=300, bbox_inches='tight')
     plt.show()
-
