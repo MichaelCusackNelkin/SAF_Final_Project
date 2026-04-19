@@ -353,7 +353,7 @@ class ExecutionSimulator:
         )
 
         if mid is not None and total_filled > 0:
-            arrival_cost = vwap - mid if side == "BUY" else mid - vwap
+            arrival_cost = (vwap - mid) / mid if side == "BUY" else (mid - vwap) / mid
         else:
             arrival_cost = None
 
@@ -782,19 +782,62 @@ class ExecutionSimulator:
 
 import random
 
-_worker_df = None
+_worker_parquet_path: str | None = None
 
-def init_worker(df):
-    global _worker_df
-    _worker_df = df
+
+def init_worker(worker_args: tuple[str, int]) -> None:
+    """Store the ticker-filtered parquet path in a module global for workers.
+
+    Parameters
+    ----------
+    worker_args : tuple[str, int]
+        Two-tuple ``(parquet_path, instrument_id)`` broadcast to each worker
+        by the ``ProcessPoolExecutor`` initializer. Only the path is used;
+        the parquet is already pre-filtered to a single instrument. No data
+        is loaded here; workers lazy-scan the parquet file per-trial.
+    """
+    global _worker_parquet_path
+    _worker_parquet_path, _ = worker_args
+
+
+def _scan_window(ts_start: int, ts_end: int) -> pl.DataFrame:
+    """Lazy-scan the worker parquet for a single [ts_start, ts_end] window.
+
+    The worker parquet is pre-filtered to a single instrument and
+    pre-sorted by ``ts_nano``, with ``ts_nano`` and ``mid`` already
+    materialised, so this scan is a pure row-group-pruned range read.
+
+    Parameters
+    ----------
+    ts_start : int
+        Inclusive lower bound on ``ts_nano``.
+    ts_end : int
+        Inclusive upper bound on ``ts_nano``.
+
+    Returns
+    -------
+    pl.DataFrame
+        Collected window.
+    """
+    return (
+        pl.scan_parquet(_worker_parquet_path)
+        .filter((pl.col("ts_nano") >= ts_start) & (pl.col("ts_nano") <= ts_end))
+        .collect()
+    )
+
 
 def run_trial(args):
-    latency, replenishment, parent_qty, depth_lmt, threshold, horizon, min_ns, min_shares, max_size, wait_ns, n_chunks, method = args
-    sim = ExecutionSimulator(_worker_df, latency_ns=latency, replenishment_rate=replenishment)
+    latency, replenishment, parent_qty, depth_lmt, threshold, horizon, min_ns, min_shares, max_size, wait_ns, n_chunks, method, ts = args
     side = random.choice(["BUY", "SELL"])
-    ts = _worker_df.sample()["ts_nano"].item()
+    df_window = _scan_window(ts, ts + horizon + latency)
+    if df_window.is_empty():
+        return None
+    sim = ExecutionSimulator(df_window, latency_ns=latency, replenishment_rate=replenishment)
     if depth_lmt != None:
-        lmt = _worker_df.filter(pl.col("ts_nano") == ts)[f"ask_px_{depth_lmt}" if side == "BUY" else f"bid_px_{depth_lmt}"][0]
+        df_at_ts = df_window.filter(pl.col("ts_nano") == ts)
+        if df_at_ts.is_empty():
+            return None
+        lmt = df_at_ts[f"ask_px_{depth_lmt}" if side == "BUY" else f"bid_px_{depth_lmt}"][0]
     else:
         lmt = depth_lmt
     if method=="OBI":
@@ -808,9 +851,12 @@ def run_trial(args):
     filled_results = [r for r in results if r["vwap"] != 0.0]
     if not filled_results:
         return None
-    
+
     # -- Return dict --
-    p0 = _worker_df.filter(pl.col("ts_nano") == ts)["mid"][0]
+    df_at_ts = df_window.filter(pl.col("ts_nano") == ts)
+    if df_at_ts.is_empty():
+        return None
+    p0 = df_at_ts["mid"][0]
 
     mean_child_arrival_cost = np.mean([r["arrival_cost"] for r in filled_results]) * 10_000
     median_child_arrival_cost = np.median([r["arrival_cost"] for r in filled_results]) * 10_000

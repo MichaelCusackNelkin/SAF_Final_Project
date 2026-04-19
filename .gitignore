@@ -1,6 +1,8 @@
 # Large Data files
 data/
 **/data/
+trial_cache/
+**/trial_cache/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
