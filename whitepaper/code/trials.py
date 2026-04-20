@@ -267,10 +267,10 @@ if __name__ == "__main__":
 
     # -- Constant / Hybrid Params --
     DEPTH_LMT = None                    # None or "0X" for the Xth level deep into the book at parent order time.
-    WAIT_NS = 10 * 1e6                  # 10ms wait between fills / min interval for OBI
+    WAIT_NS = 200.0 * 1e6                  # 10ms wait between fills / min interval for OBI
     N_CHUNKS = 25
     OBI_THRESHOLD = 0.10                # OBI threshold for entry, +- for buys and sells
-    HORIZON = 5 * 1e9                   # Hard horizon 3s, allowed trading horizon, ns
+    HORIZON = 30 * 1e9                   # Hard horizon, ns
     MIN_SHARES = 0                      # unused by constant/hybrid; kept for cache-key consistency
     MAX_SIZE = 0                        # unused by constant/hybrid; kept for cache-key consistency
 
@@ -394,7 +394,7 @@ if __name__ == "__main__":
         if len(trial_starts) < N_TRIALS:
             print(
                 f"[WARNING] Only {len(trial_starts)} {HORIZON/1e9:.0f}s "
-                f"intraday windows (with at most 30s overlap) fit in the "
+                f"intraday windows (with at most {MAX_OVERLAP_NS / 1e9}s overlap) fit in the "
                 f"dataset ({N_TRIALS} requested). Using {len(trial_starts)} "
                 f"trials."
             )
