@@ -456,6 +456,115 @@ class ExecutionSimulator:
             "arrival_cost": arrival_cost,
         }
 
+    def accept_resting_lmt_order(
+        self,
+        side: str,
+        limit_price: float,
+        order_size: int,
+        ts_nano: int,
+        deadline_ns: int | None = None,
+    ) -> dict:
+        """
+        Simulate a resting (passive) limit order at a given timestamp.
+
+        The order is posted at ``limit_price`` and waits for the market to
+        cross it.  A BUY resting on the bid fills when the best ask drops
+        to or below the limit; a SELL resting on the ask fills when the
+        best bid rises to or above the limit.  Each eligible row contributes
+        up to the top-of-book opposite-side size as a proxy for available
+        fill volume.
+
+        Parameters
+        ----------
+        side : str
+            ``"BUY"`` (resting on the bid) or ``"SELL"`` (resting on the ask).
+        limit_price : float
+            Resting limit price.
+        order_size : int
+            Number of shares to fill.
+        ts_nano : int
+            Nanosecond timestamp at which the order is sent.
+        deadline_ns : int or None, optional
+            Nanosecond timestamp after which the order is cancelled.  When
+            ``None`` (default) the scan runs to the end of the data.
+
+        Returns
+        -------
+        dict
+            ``vwap`` — volume-weighted average fill price.
+            ``fills`` — list of ``(price, qty_filled)`` tuples.
+            ``total_filled`` — total shares filled (may be < *order_size*).
+            ``levels_swept`` — always ``0`` for resting orders.
+            ``executed_at_ns`` — ``ts_nano`` of the last row that produced
+            a fill (or the placement row if no fill occurred).
+            ``executed_at_idx`` — integer index of that row in the internal
+            arrays (useful for slicing).
+            ``arrival_cost`` — difference between VWAP and midprice at
+            placement time (positive means paid more than mid for BUY,
+            received less than mid for SELL).
+        """
+        self.advance_to(ts_nano + self.latency_ns)
+        mid = self.get_midprice()
+
+        fills: list[tuple[float, int]] = []
+        remaining = order_size
+        last_fill_idx = self._cur_idx
+
+        for idx in range(self._cur_idx, self._n_rows):
+            if remaining <= 0:
+                break
+            if deadline_ns is not None and int(self.ts_ns[idx]) > deadline_ns:
+                break
+
+            if side == "BUY":
+                top_px = self.ask_px[idx, 0]
+                top_sz = self.ask_sz[idx, 0]
+                crossed = top_px > 0 and top_sz > 0 and top_px <= limit_price
+            else:
+                top_px = self.bid_px[idx, 0]
+                top_sz = self.bid_sz[idx, 0]
+                crossed = top_px > 0 and top_sz > 0 and top_px >= limit_price
+
+            if not crossed:
+                continue
+
+            filled = min(remaining, int(top_sz))
+            if filled <= 0:
+                continue
+            fills.append((limit_price, filled))
+            remaining -= filled
+            last_fill_idx = idx
+
+        self._cur_idx = last_fill_idx
+        self.bids, self.asks = self._build_book_from_row(last_fill_idx)
+
+        total_filled = order_size - remaining
+        vwap = (
+            sum(px * qty for px, qty in fills) / total_filled
+            if total_filled > 0
+            else 0.0
+        )
+
+        if mid is not None and total_filled > 0:
+            arrival_cost = (vwap - mid) / mid if side == "BUY" else (mid - vwap) / mid
+        else:
+            arrival_cost = None
+
+        replenished = self._compute_replenishment(side)
+        self._sync_book_to_arrays()
+        self._apply_impact_to_future(side, fills)
+        self._apply_replenishment_to_future(side, replenished)
+
+        return {
+            "vwap": vwap,
+            "fills": fills,
+            "total_filled": total_filled,
+            "levels_swept": 0,
+            "executed_at_ns": int(self.ts_ns[self._cur_idx]),
+            "executed_at_idx": self._cur_idx,
+            "arrival_cost": arrival_cost,
+        }
+
     # ------------------------------------------------------------------
     # filling strategies
     # ------------------------------------------------------------------
@@ -514,7 +623,7 @@ class ExecutionSimulator:
             DataFrame.
         """
         chunk_size = int(parent_size / n_chunks)
-        timestamps = np.arange(start_ts_ns, start_ts_ns + n_chunks * wait_ns, wait_ns)
+        timestamps = np.arange(start_ts_ns, start_ts_ns + n_chunks * int(wait_ns), int(wait_ns))
         results: list[dict] = []
         for t in timestamps:
             r = self.accept_mkt_order(side, chunk_size, int(t))
@@ -557,7 +666,7 @@ class ExecutionSimulator:
             DataFrame.
         """
         chunk_size = parent_size // n_chunks
-        timestamps = np.arange(start_ts_ns, start_ts_ns + n_chunks * wait_ns, wait_ns)
+        timestamps = np.arange(start_ts_ns, start_ts_ns + n_chunks * int(wait_ns), int(wait_ns))
         results: list[dict] = []
 
         for i, t in enumerate(timestamps):
@@ -567,6 +676,162 @@ class ExecutionSimulator:
             else:
                 r = self.accept_ioc_lmt_order(side, limit_px, size, int(t))
             results.append(r)
+        return results, self.get_book_df()
+
+    def constant_resting_fill(
+        self,
+        side: str,
+        limit_price: float,
+        parent_size: int,
+        start_ts_ns: int,
+        wait_ns: int,
+        n_chunks: int,
+        deadline_ns: int | None = None,
+    ) -> tuple[list[dict], pl.DataFrame]:
+        """
+        Split a parent order into equal-sized resting limit-order chunks.
+
+        Parameters
+        ----------
+        side : str
+            ``"BUY"`` or ``"SELL"``.
+        limit_price : float
+            Resting limit price for every child order.
+        parent_size : int
+            Total number of shares to fill.
+        start_ts_ns : int
+            Nanosecond timestamp of the first child order.
+        wait_ns : int
+            Nanosecond interval between child orders.
+        n_chunks : int
+            Number of child orders.
+        deadline_ns : int or None, optional
+            Nanosecond cancellation deadline passed to each child order.
+
+        Returns
+        -------
+        tuple[list[dict], pl.DataFrame]
+            List of execution result dicts and the post-execution book
+            DataFrame.
+        """
+        chunk_size = parent_size // n_chunks
+        timestamps = np.arange(start_ts_ns, start_ts_ns + n_chunks * int(wait_ns), int(wait_ns))
+        results: list[dict] = []
+
+        for i, t in enumerate(timestamps):
+            size = parent_size - (n_chunks - 1) * chunk_size if i == n_chunks - 1 else chunk_size
+            r = self.accept_resting_lmt_order(side, limit_price, size, int(t), deadline_ns=deadline_ns)
+            results.append(r)
+        return results, self.get_book_df()
+
+    def hybrid_fill(
+        self,
+        side: str,
+        parent_size: int,
+        start_ts_ns: int,
+        obi_threshold: float,
+        n_slices: int,
+        wait_ns: int,
+    ) -> tuple[list[dict], pl.DataFrame]:
+        """
+        Fill a parent order by switching tactics based on top-of-book OBI.
+
+        The horizon is carved into ``n_slices`` equal child orders spaced by
+        ``wait_ns``.  At each decision point the top-of-book OBI is compared
+        to ``obi_threshold`` and the tactic is chosen accordingly: an
+        aggressive market order when the imbalance points against the trade,
+        a fan of resting limit orders across the top three passive levels
+        when it points with the trade, and a plain market order otherwise.
+        Any residual quantity after the horizon is swept with a final
+        mop-up market order.
+
+        Parameters
+        ----------
+        side : str
+            ``"BUY"`` or ``"SELL"``.
+        parent_size : int
+            Total number of shares to fill.
+        start_ts_ns : int
+            Nanosecond timestamp of the first child order.
+        obi_threshold : float
+            Absolute OBI threshold separating the adverse, neutral, and
+            favorable regimes.
+        n_slices : int
+            Number of scheduled child orders within the horizon.
+        wait_ns : int
+            Nanosecond interval between decision points.
+
+        Returns
+        -------
+        tuple[list[dict], pl.DataFrame]
+            List of execution result dicts and the post-execution book
+            DataFrame.
+        """
+        qty_per_slice = parent_size // n_slices
+        remaining = parent_size
+        current_ts = start_ts_ns
+        results: list[dict] = []
+
+        while remaining > 0:
+            if current_ts > int(self.ts_ns[-1]):
+                break
+            idx = max(0, int(np.searchsorted(self.ts_ns, current_ts, side="right")) - 1)
+            bid_sz0 = float(self.bid_sz[idx, 0])
+            ask_sz0 = float(self.ask_sz[idx, 0])
+            denom = bid_sz0 + ask_sz0
+            obi = (bid_sz0 - ask_sz0) / denom if denom > 0 else 0.0
+
+            size = remaining if remaining <= qty_per_slice else qty_per_slice
+
+            adverse = (side == "BUY" and obi > obi_threshold) or (
+                side == "SELL" and obi < -obi_threshold
+            )
+            favorable = (side == "BUY" and obi < -obi_threshold) or (
+                side == "SELL" and obi > obi_threshold
+            )
+
+            if adverse:
+                r = self.accept_mkt_order(side, size, current_ts)
+                results.append(r)
+                remaining -= r["total_filled"]
+            elif favorable:
+                expiry = current_ts + wait_ns
+                for level in range(3):
+                    if remaining <= 0:
+                        break
+                    px = (
+                        float(self.bid_px[idx, level])
+                        if side == "BUY"
+                        else float(self.ask_px[idx, level])
+                    )
+                    if px <= 0:
+                        continue
+                    child_size = remaining if remaining <= qty_per_slice else qty_per_slice
+                    r = self.accept_resting_lmt_order(
+                        side,
+                        px,
+                        child_size,
+                        current_ts + level,
+                        deadline_ns=expiry,
+                    )
+                    results.append(r)
+                    remaining -= r["total_filled"]
+            else:
+                r = self.accept_mkt_order(side, size, current_ts)
+                results.append(r)
+                remaining -= r["total_filled"]
+
+            current_ts += wait_ns
+
+        while remaining > 0:
+            mop_ts = min(current_ts, int(self.ts_ns[-1]))
+            r = self.accept_mkt_order(side, remaining, mop_ts)
+            remaining -= r["total_filled"]
+            results.append(r)
+            if r["total_filled"] == 0 or mop_ts >= int(self.ts_ns[-1]):
+                break
+            current_ts += int(wait_ns)
+
         return results, self.get_book_df()
 
     def obi_adaptive_fill(
@@ -848,6 +1113,13 @@ def run_trial(args):
         )
     elif method=="constant":
         results, _ = sim.constant_ioc_fill(side, lmt, parent_qty, ts, wait_ns=wait_ns, n_chunks=n_chunks)
+    elif method=="hybrid":
+        results, _ = sim.hybrid_fill(
+            side, parent_qty, ts,
+            obi_threshold=threshold,
+            n_slices=n_chunks,
+            wait_ns=int(wait_ns),
+        )
     filled_results = [r for r in results if r["vwap"] != 0.0]
     if not filled_results:
         return None

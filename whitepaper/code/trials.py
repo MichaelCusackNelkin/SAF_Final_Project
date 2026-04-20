@@ -16,7 +16,7 @@ def _trial_cache_key(
     replenishment: float,
     parent_qty: int,
     depth_lmt: str,
-    threshold: float,
+    OBI_THRESHOLD: float,
     horizon: float,
     min_ns: float,
     min_shares: int,
@@ -41,8 +41,8 @@ def _trial_cache_key(
         Total parent order quantity.
     depth_lmt : str
         Zero-padded depth level string (e.g. "03").
-    threshold : float
-        OBI entry threshold (absolute value).
+    OBI_THRESHOLD : float
+        OBI entry OBI_THRESHOLD (absolute value).
     horizon : float
         Trading horizon in nanoseconds.
     min_ns : float
@@ -71,7 +71,7 @@ def _trial_cache_key(
         "replenishment": replenishment,
         "parent_qty": parent_qty,
         "depth_lmt": depth_lmt,
-        "threshold": threshold,
+        "OBI_THRESHOLD": OBI_THRESHOLD,
         "horizon": horizon,
         "min_ns": min_ns,
         "min_shares": min_shares,
@@ -254,21 +254,25 @@ if __name__ == "__main__":
     LATENCY = 100 * 1e3                 #100us, ns
     REPLENISHMENT = 30.0                #poisson rate of replenishment using wall-clock
     PARENT_QTY = 5_000
-    DEPTH_LMT = None                    # None or "0X" for the Xth level deep into the book at parent order time.
     MAX_WORKERS = 10
     N_TRIALS = 10_000
     MAX_OVERLAP_NS = 1 * int(1e9)       # 1s overlap between trial windows. Strictly less than horizon.
 
-    # -- OBI Params --
-    MIN_NS = 0                          #1ms, waiting time between fills for OBI filler, ns
-    MIN_SHARES = 0                      # waiting time in shares traded between fills for OBI filler
-    THRESHOLD = 0.000                   # OBI threshold for entry, +- for buys and sells
-    HORIZON = 2 * 1e9                   # Hard horizon 3s, allowed trading horizon, ns
-    MAX_SIZE = 350                      # Maximum child order sizes
+    # # -- OBI Params --
+    # WAIT_NS = 0                          #1ms, waiting time between fills for OBI filler, ns
+    # MIN_SHARES = 0                      # waiting time in shares traded between fills for OBI filler
+    # OBI_THRESHOLD = 0.000                   # OBI threshold for entry, +- for buys and sells
+    # HORIZON = 2 * 1e9                   # Hard horizon 3s, allowed trading horizon, ns
+    # MAX_SIZE = 350                      # Maximum child order sizes
 
-    # -- Constant Params --
-    WAIT_NS = 10 * 1e6                 # 10ms wait between constant fills
+    # -- Constant / Hybrid Params --
+    DEPTH_LMT = None                    # None or "0X" for the Xth level deep into the book at parent order time.
+    WAIT_NS = 10 * 1e6                  # 10ms wait between fills / min interval for OBI
     N_CHUNKS = 25
+    OBI_THRESHOLD = 0.10                # OBI threshold for entry, +- for buys and sells
+    HORIZON = 5 * 1e9                   # Hard horizon 3s, allowed trading horizon, ns
+    MIN_SHARES = 0                      # unused by constant/hybrid; kept for cache-key consistency
+    MAX_SIZE = 0                        # unused by constant/hybrid; kept for cache-key consistency
 
     # -- Cache Dir --
     CACHE_DIR = Path("trial_cache")
@@ -276,7 +280,7 @@ if __name__ == "__main__":
 
     # Resolve parquet path + ticker mapping without loading any rows.
     parquet_path, ticker_to_id = asyncio.run(get_data_paths(TICKER_LIST, START, END, DATASET, SCHEMA, CACHE_ONLY))
-    # amzn_id = ticker_to_id[TICKER]
+    # ticker_id = ticker_to_id[TICKER]
     TICKER_LIST.reverse()
 
     # Single-pass streaming write for any missing ticker parquets.
@@ -313,7 +317,7 @@ if __name__ == "__main__":
 
     for ticker in TICKER_LIST:
         TICKER = ticker
-        amzn_id = ticker_to_id[TICKER]
+        ticker_id = ticker_to_id[TICKER]
         ticker_parquet_path = CACHE_DIR / f"{TICKER}_{parquet_path.stem}.parquet"
         print(f"[ticker parquet hit] using {ticker_parquet_path}")
 
@@ -405,9 +409,9 @@ if __name__ == "__main__":
             replenishment=REPLENISHMENT,
             parent_qty=PARENT_QTY,
             depth_lmt=DEPTH_LMT,
-            threshold=THRESHOLD,
+            OBI_THRESHOLD=OBI_THRESHOLD,
             horizon=HORIZON,
-            min_ns=MIN_NS,
+            min_ns=WAIT_NS,
             min_shares=MIN_SHARES,
             max_size=MAX_SIZE,
             wait_ns=WAIT_NS,
@@ -418,32 +422,49 @@ if __name__ == "__main__":
         # ===========
         # OBI Trial
         # ===========
-        METHOD = "OBI"
-        trial_args = [(LATENCY, REPLENISHMENT, PARENT_QTY, DEPTH_LMT,
-                    THRESHOLD, HORIZON, MIN_NS, MIN_SHARES, MAX_SIZE, WAIT_NS, N_CHUNKS, METHOD, ts)
-                    for ts in trial_starts]
-        cost_obi = load_or_run(
-            method=METHOD,
-            trial_args=trial_args,
-            n_trials=len(trial_starts),
-            worker_args=(str(ticker_parquet_path), amzn_id),
-            cache_dir=CACHE_DIR,
-            max_workers=MAX_WORKERS,
-            **shared_kwargs,
-        )
+        # METHOD = "OBI"
+        # trial_args = [(LATENCY, REPLENISHMENT, PARENT_QTY, DEPTH_LMT,
+        #             OBI_THRESHOLD, HORIZON, WAIT_NS, MIN_SHARES, MAX_SIZE, WAIT_NS, N_CHUNKS, METHOD, ts)
+        #             for ts in trial_starts]
+        # cost_obi = load_or_run(
+        #     method=METHOD,
+        #     trial_args=trial_args,
+        #     n_trials=len(trial_starts),
+        #     worker_args=(str(ticker_parquet_path), ticker_id),
+        #     cache_dir=CACHE_DIR,
+        #     max_workers=MAX_WORKERS,
+        #     **shared_kwargs,
+        # )
 
         #================
         # Constant Trial
         #================
         METHOD = "constant"
         trial_args = [(LATENCY, REPLENISHMENT, PARENT_QTY, DEPTH_LMT,
-                    THRESHOLD, HORIZON, MIN_NS, MIN_SHARES, MAX_SIZE, WAIT_NS, N_CHUNKS, METHOD, ts)
+                    OBI_THRESHOLD, HORIZON, WAIT_NS, MIN_SHARES, MAX_SIZE, WAIT_NS, N_CHUNKS, METHOD, ts)
                     for ts in trial_starts]
         cost_constant = load_or_run(
             method=METHOD,
             trial_args=trial_args,
             n_trials=len(trial_starts),
-            worker_args=(str(ticker_parquet_path), amzn_id),
+            worker_args=(str(ticker_parquet_path), ticker_id),
+            cache_dir=CACHE_DIR,
+            max_workers=MAX_WORKERS,
+            **shared_kwargs,
+        )
+
+        #================
+        # Hybrid Trial
+        #================
+        METHOD = "hybrid"
+        trial_args = [(LATENCY, REPLENISHMENT, PARENT_QTY, DEPTH_LMT,
+                    OBI_THRESHOLD, HORIZON, WAIT_NS, MIN_SHARES, MAX_SIZE, WAIT_NS, N_CHUNKS, METHOD, ts)
+                    for ts in trial_starts]
+        cost_hybrid = load_or_run(
+            method=METHOD,
+            trial_args=trial_args,
+            n_trials=len(trial_starts),
+            worker_args=(str(ticker_parquet_path), ticker_id),
             cache_dir=CACHE_DIR,
             max_workers=MAX_WORKERS,
             **shared_kwargs,
@@ -451,7 +472,7 @@ if __name__ == "__main__":
 
         # -- Descriptive Stats --
         print("\nOBI Fill Costs")
-        print(cost_obi.with_columns((pl.col("lifetime_ns") / 1e9).alias("lifetime_s"))
+        print(cost_hybrid.with_columns((pl.col("lifetime_ns") / 1e9).alias("lifetime_s"))
             .select(
                 ["parent_filled", "parent_arrival_cost", "mean_child_arrival_cost", "median_child_arrival_cost", "lifetime_s"]
                 ).describe()
@@ -467,14 +488,14 @@ if __name__ == "__main__":
         # Plotting
         #===========
 
-        plot_obi = cost_obi
+        plot_hybrid = cost_hybrid
         plot_constant = cost_constant
         plot_pre = f""
-        plot_end = f"N.{N_TRIALS}_T.{TICKER}_H.{HORIZON}_S.{MAX_SIZE}_D.{DEPTH_LMT}_L.{LATENCY}_R.{REPLENISHMENT}"
+        plot_end = f"N.{N_TRIALS}_T.{TICKER}_H.{HORIZON}_O.{OBI_THRESHOLD}_CH.{N_CHUNKS}_D.{DEPTH_LMT}"
 
         # -- Parent Costs --
         log = True
-        plt.hist(plot_obi["parent_arrival_cost"], bins=25, edgecolor="black", color="tab:orange", alpha=0.7, label="OBI", log=log)
+        plt.hist(plot_hybrid["parent_arrival_cost"], bins=25, edgecolor="black", color="tab:orange", alpha=0.7, label="OBI", log=log)
         plt.hist(plot_constant["parent_arrival_cost"], bins=25, edgecolor="black", color="tab:blue", alpha=0.7, label="Constant", log=log)
         plt.xlabel("Cost per Share (bps)")
         plt.ylabel("Count")
@@ -486,7 +507,7 @@ if __name__ == "__main__":
         # -- Child Costs --
         fig, ax = plt.subplots(1,2,figsize=(8,4))
         # -- Means --
-        ax[0].hist(plot_obi["mean_child_arrival_cost"], bins=25, edgecolor="black", color="tab:orange", alpha=0.7, label="OBI")
+        ax[0].hist(plot_hybrid["mean_child_arrival_cost"], bins=25, edgecolor="black", color="tab:orange", alpha=0.7, label="OBI")
         ax[0].hist(plot_constant["mean_child_arrival_cost"], bins=25, edgecolor="black", color="tab:blue", alpha=0.7, label="Constant")
         ax[0].set_xlabel("Cost per Share (bps)")
         ax[0].set_ylabel("Count")
@@ -494,7 +515,7 @@ if __name__ == "__main__":
         ax[0].legend()
 
         # -- Medians --
-        ax[1].hist(plot_obi["median_child_arrival_cost"], bins=25, edgecolor="black", color="tab:orange", alpha=0.7, label="OBI")
+        ax[1].hist(plot_hybrid["median_child_arrival_cost"], bins=25, edgecolor="black", color="tab:orange", alpha=0.7, label="OBI")
         ax[1].hist(plot_constant["median_child_arrival_cost"], bins=25, edgecolor="black", color="tab:blue", alpha=0.7, label="Constant")
         ax[1].set_xlabel("Cost per Share (bps)")
         ax[1].set_ylabel("Count")
@@ -509,8 +530,8 @@ if __name__ == "__main__":
         # -- Fills --
         from matplotlib.ticker import PercentFormatter
         plt.hist(
-            plot_obi["parent_filled"],
-            weights=np.ones(len(plot_obi["parent_filled"])) / len(plot_obi["parent_filled"]),
+            plot_hybrid["parent_filled"],
+            weights=np.ones(len(plot_hybrid["parent_filled"])) / len(plot_hybrid["parent_filled"]),
             bins=25, edgecolor="black", color="tab:orange", alpha=0.7, label="OBI"
             )
         plt.hist(
@@ -528,8 +549,8 @@ if __name__ == "__main__":
 
         # -- Parent Lifetimes --
         plt.hist(
-            plot_obi["lifetime_ns"] / 1e9,
-            weights=np.ones(len(plot_obi["lifetime_ns"])) / len(plot_obi["lifetime_ns"]),
+            plot_hybrid["lifetime_ns"] / 1e9,
+            weights=np.ones(len(plot_hybrid["lifetime_ns"])) / len(plot_hybrid["lifetime_ns"]),
             bins=25, edgecolor="black", color="tab:orange", alpha=0.7, label="OBI"
             )
         plt.hist(
@@ -548,7 +569,7 @@ if __name__ == "__main__":
         # -- Scatter --
         fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharex=True, sharey=True)
         axes[0].scatter(
-            plot_obi["parent_filled"], plot_obi["parent_arrival_cost"],
+            plot_hybrid["parent_filled"], plot_hybrid["parent_arrival_cost"],
             color="tab:orange", alpha=0.4, s=8,
         )
         axes[0].set_title("OBI")
