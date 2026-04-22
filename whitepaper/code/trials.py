@@ -12,6 +12,8 @@ load_dotenv()
 
 def _trial_cache_key(
     ticker: str,
+    start: str,
+    end: str,
     latency: float,
     replenishment: float,
     parent_qty: int,
@@ -26,6 +28,7 @@ def _trial_cache_key(
     max_overlap_ns: float,
     method: str,
     n_trials: int,
+    seed: int,
 ) -> str:
     """Compute an MD5 hash over the trial parameters for cache keying.
 
@@ -67,6 +70,8 @@ def _trial_cache_key(
     """
     payload = {
         "ticker": ticker,
+        "start": start,
+        "end": end,
         "latency": latency,
         "replenishment": replenishment,
         "parent_qty": parent_qty,
@@ -81,6 +86,7 @@ def _trial_cache_key(
         "max_overlap_ns": max_overlap_ns,
         "method": method,
         "n_trials": n_trials,
+        "seed": seed,
     }
     serialized = json.dumps(payload, sort_keys=True, default=str)
     return hashlib.md5(serialized.encode("utf-8")).hexdigest()
@@ -249,19 +255,22 @@ if __name__ == "__main__":
     SCHEMA = "MBP-10"
     CACHE_ONLY = False
 
-    # -- General Params --
-    # TICKER = "AMZN"
+    # -- General/Data Params --
     LATENCY = 100 * 1e3                 #100us, ns
     REPLENISHMENT = 30.0                #poisson rate of replenishment using wall-clock
     PARENT_QTY = 5_000
     MAX_WORKERS = 10
-    N_TRIALS = 10_000
-    MAX_OVERLAP_NS = 1 * int(1e9)       # 1s overlap between trial windows. Strictly less than horizon.
+    N_TRIALS = 100_000
+    SEED = 42
+
+    # -- Window Params --
+    HORIZON = 30 * 1e9                  # Window of data to pull for each trial
+    MAX_OVERLAP_NS = HORIZON - 1        # Overlap between trial windows. Strictly less than horizon.
 
     # # -- OBI Params --
-    # WAIT_NS = 0                          #1ms, waiting time between fills for OBI filler, ns
+    # WAIT_NS = 0                         #1ms, waiting time between fills for OBI filler, ns
     # MIN_SHARES = 0                      # waiting time in shares traded between fills for OBI filler
-    # OBI_THRESHOLD = 0.000                   # OBI threshold for entry, +- for buys and sells
+    # OBI_THRESHOLD = 0.000               # OBI threshold for entry, +- for buys and sells
     # HORIZON = 2 * 1e9                   # Hard horizon 3s, allowed trading horizon, ns
     # MAX_SIZE = 350                      # Maximum child order sizes
 
@@ -270,7 +279,6 @@ if __name__ == "__main__":
     WAIT_NS = 200.0 * 1e6                  # 10ms wait between fills / min interval for OBI
     N_CHUNKS = 25
     OBI_THRESHOLD = 0.10                # OBI threshold for entry, +- for buys and sells
-    HORIZON = 30 * 1e9                   # Hard horizon, ns
     MIN_SHARES = 0                      # unused by constant/hybrid; kept for cache-key consistency
     MAX_SIZE = 0                        # unused by constant/hybrid; kept for cache-key consistency
 
@@ -389,7 +397,7 @@ if __name__ == "__main__":
                 trial_starts.append(_start)
                 _cursor = _start + _step_ns
 
-        rng = np.random.default_rng(42)
+        rng = np.random.default_rng(SEED)
         rng.shuffle(trial_starts)
         if len(trial_starts) < N_TRIALS:
             print(
@@ -405,6 +413,8 @@ if __name__ == "__main__":
         """Parallelized Trials"""
         shared_kwargs = dict(
             ticker=TICKER,
+            start=START,
+            end=END,
             latency=LATENCY,
             replenishment=REPLENISHMENT,
             parent_qty=PARENT_QTY,
@@ -417,6 +427,7 @@ if __name__ == "__main__":
             wait_ns=WAIT_NS,
             n_chunks=N_CHUNKS,
             max_overlap_ns=MAX_OVERLAP_NS,
+            seed=SEED,
         )
 
         # ===========

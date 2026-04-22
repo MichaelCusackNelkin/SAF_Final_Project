@@ -3,6 +3,8 @@ data/
 **/data/
 trial_cache/
 **/trial_cache/
+old_trial_cache/
+**/old_trial_cache/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

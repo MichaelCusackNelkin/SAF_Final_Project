@@ -12,7 +12,7 @@ def main() -> None:
     """Load OBI and constant parquets for a cached trial and scatter-plot them.
 
     The input parquet's sidecar JSON is used to recover the simulation
-    parameters, and the partner (OBI <-> constant) parquet is located by
+    parameters, and the partner (hybrid <-> constant) parquet is located by
     recomputing the MD5 cache key with the opposite ``method``.
     """
     parser = argparse.ArgumentParser(description=__doc__)
@@ -29,21 +29,21 @@ def main() -> None:
     for k in sorted(params):
         print(f"  {k}: {params[k]}")
 
-    obi_key = _trial_cache_key(**{**params, "method": "OBI"})
+    hybrid_key = _trial_cache_key(**{**params, "method": "hybrid"})
     const_key = _trial_cache_key(**{**params, "method": "constant"})
 
-    obi_path = cache_dir / f"{obi_key}.parquet"
+    hybrid_path = cache_dir / f"{hybrid_key}.parquet"
     const_path = cache_dir / f"{const_key}.parquet"
 
-    obi = pl.read_parquet(obi_path)
+    hybrid = pl.read_parquet(hybrid_path)
     const = pl.read_parquet(const_path)
 
     fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharex=True, sharey=True)
     axes[0].scatter(
-        obi["parent_filled"], obi["parent_arrival_cost"],
+        hybrid["parent_filled"], hybrid["parent_arrival_cost"],
         color="tab:orange", alpha=0.4, s=8,
     )
-    axes[0].set_title("OBI")
+    axes[0].set_title("Hybrid")
     axes[0].set_xlabel("parent_filled")
     axes[0].set_ylabel("parent_arrival_cost (bps)")
 
@@ -63,7 +63,7 @@ def main() -> None:
     fig.savefig(out_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved {out_path}")
-    print(f"OBI parquet:      {obi_path}")
+    print(f"Hybrid parquet:   {hybrid_path}")
     print(f"Constant parquet: {const_path}")
 
 
