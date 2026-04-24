@@ -169,7 +169,7 @@
 \hypersetup{
   pdftitle={Comparing the Impact and Arrival Cost of Naive and OBI-Enhanced Order Splitting Strategies},
   pdfauthor={Michael Cusack-Nelkin; Alick Zhou; Debby Zhao; Michael Bakshandeh; Vijeet Prasad},
-  pdfkeywords={template, quarto, R, Python, reproducibility},
+  pdfkeywords={optimal, execution, order, splitting, imbalance},
   colorlinks=true,
   linkcolor={blue},
   filecolor={Maroon},
@@ -202,21 +202,108 @@ Order Splitting Strategies}
 \\%
 %
 \texttt{vp2580@columbia.edu}}
-\date{2026-04-16}
+\date{2026-04-23}
 \begin{document}
 \maketitle
 
 
 \section{Motivation and Main Ideas}\label{motivation-and-main-ideas}
 
+Motivation is a way to minimize the cost of an order by taking advantage
+of favorable price moves and avoiding unfavorable ones.
+
+\subsection{Definitions}\label{definitions}
+
+\begin{itemize}
+\tightlist
+\item
+  OBi
+\item
+  Impact
+\item
+  Arrival Cost
+\end{itemize}
+
+\subsection{Naive Splitting is Bad}\label{naive-splitting-is-bad}
+
+Moves prices too much
+\pandocbounded{\includegraphics[keepaspectratio]{.pdf}}
+
+\subsection{OBI Provides a Way to Identify Favorable/Adverse Price
+Movements}\label{obi-provides-a-way-to-identify-favorableadverse-price-movements}
+
+OBI of the top 6 levels.
+\pandocbounded{\includegraphics[keepaspectratio]{.pdf}}
+
 \section{Empirical Findings}\label{empirical-findings}
+
+\subsection{Descriptive Stats}\label{descriptive-stats}
+
+\subsection{Test Stats / Significance}\label{test-stats-significance}
+
+\subsection{Latency / Replenishment / Time of Day
+Plots/Stats}\label{latency-replenishment-time-of-day-plotsstats}
+
+\pandocbounded{\includegraphics[keepaspectratio]{.pdf}}
+\pandocbounded{\includegraphics[keepaspectratio]{.pdf}}
+\pandocbounded{\includegraphics[keepaspectratio]{.pdf}}
 
 \section{Methodological Choices and
 Innovations}\label{methodological-choices-and-innovations}
 
-\section{Theoretical Justifications}\label{theoretical-justifications}
+\subsection{Failed Attempt: OBI Aggressive
+Only}\label{failed-attempt-obi-aggressive-only}
 
-\section{relationship to Prior Work}\label{relationship-to-prior-work}
+Shifting reference frame from alpha to execution (given mandate to
+buy/sell.) Not trying to predict price, but take advantage of price
+moves. \pandocbounded{\includegraphics[keepaspectratio]{.pdf}}
+
+\subsection{Successful: OBI Calibrated
+Aggression}\label{successful-obi-calibrated-aggression}
+
+\begin{figure}
+
+\centering{
+
+\pandocbounded{\includegraphics[keepaspectratio]{.pdf}}
+
+}
+
+\caption{\label{fig-hybrid}Hybrid Plot}
+
+\end{figure}%
+
+\subsection{Simulator}\label{simulator}
+
+\begin{figure}
+
+\centering{
+
+\pandocbounded{\includegraphics[keepaspectratio]{.pdf}}
+
+}
+
+\caption{\label{fig-sim}Impact Plot}
+
+\end{figure}%
+
+\subsubsection{Choice: fixed horizon (time
+constraint)}\label{choice-fixed-horizon-time-constraint}
+
+\subsubsection{Choice: constant fills
+within-band}\label{choice-constant-fills-within-band}
+
+\section{Future Work}\label{future-work}
+
+\subsection{Smoothed OBI}\label{smoothed-obi}
+
+Tried it, got some weird results (no hyperparam tuning, possibly a quirk
+of replenishment.)
+
+\subsection{A Catch-up/Fall-Behind
+Mechanism}\label{a-catch-upfall-behind-mechanism}
+
+Currently filling naively within-band.
 
 
 

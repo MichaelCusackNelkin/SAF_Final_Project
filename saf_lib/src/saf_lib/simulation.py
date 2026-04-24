@@ -776,11 +776,10 @@ class ExecutionSimulator:
             if current_ts > int(self.ts_ns[-1]):
                 break
             idx = max(0, int(np.searchsorted(self.ts_ns, current_ts, side="right")) - 1)
-            bid_sz0 = float(self.bid_sz[idx, 0])
-            ask_sz0 = float(self.ask_sz[idx, 0])
+            bid_sz0 = np.sum(self.bid_sz[idx, 0:6])
+            ask_sz0 = np.sum(self.ask_sz[idx, 0:6])
             denom = bid_sz0 + ask_sz0
-            obi = (bid_sz0 - ask_sz0) / denom if denom > 0 else 0.0
-
+            obi = (bid_sz0 - ask_sz0) / denom if denom > 0 else 0.0 # OBI using the top 5 levels
             size = remaining if remaining <= qty_per_slice else qty_per_slice
 
             adverse = (side == "BUY" and obi > obi_threshold) or (
@@ -796,7 +795,7 @@ class ExecutionSimulator:
                 remaining -= r["total_filled"]
             elif favorable:
                 expiry = current_ts + wait_ns
-                for level in range(3):
+                for level in range(6):
                     if remaining <= 0:
                         break
                     px = (
@@ -1138,7 +1137,10 @@ def run_trial(args):
     parent_vwap = np.sum([r["vwap"] * r["total_filled"] for r in filled_results]) / parent_filled
     parent_arrival_cost = (parent_vwap - p0) / p0 * 10_000 if side == "BUY" else (p0 - parent_vwap) / p0 * 10_000
 
+    ts_event = [r["executed_at_ns"] for r in filled_results][0]
+
     return {
+        "ts_event": ts_event,
         "side": side,
         "parent_filled": parent_filled,
         "child_fill_times": child_fill_times,

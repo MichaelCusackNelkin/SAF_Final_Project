@@ -86,8 +86,8 @@ def compute_markouts(
     bid_sz_cols = [f"bid_sz_{lvl:02d}" for lvl in _LEVELS if f"bid_sz_{lvl:02d}" in df.columns]
     ask_sz_cols = [f"ask_sz_{lvl:02d}" for lvl in _LEVELS if f"ask_sz_{lvl:02d}" in df.columns]
 
-    bid_full = pl.sum_horizontal([pl.col(c).cast(pl.Float64) for c in bid_sz_cols[:5]])
-    ask_full = pl.sum_horizontal([pl.col(c).cast(pl.Float64) for c in ask_sz_cols[:5]])
+    bid_full = pl.sum_horizontal([pl.col(c).cast(pl.Float64) for c in bid_sz_cols[:6]])
+    ask_full = pl.sum_horizontal([pl.col(c).cast(pl.Float64) for c in ask_sz_cols[:6]])
     denom_full = bid_full + ask_full
     bid0 = pl.col("bid_sz_00").cast(pl.Float64)
     ask0 = pl.col("ask_sz_00").cast(pl.Float64)
@@ -283,7 +283,7 @@ def plot_markout_curves(
 
     ax.set_xscale("log")
     ax.set_xlabel("Time (ns, log)")
-    ax.set_ylabel("Markout (bps)")
+    ax.set_ylabel("Markout (mils)")
     ax.set_title(f"Markout Curves by {signal_col}")
     ax.axhline(0, color="grey", linestyle="--", linewidth=0.8)
     ax.grid(True, which="major", alpha=0.5)

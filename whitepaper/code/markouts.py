@@ -23,16 +23,16 @@ async def get_data() -> pl.DataFrame:
 
 
 if __name__ == "__main__":
-    SEED = 42
+    SEED = 1324
 
     # Get Data adn select to relavent columns
     df, map = asyncio.run(get_data())
-    print(f"File size (gb): {df.estimated_size('gb'):.2f}")
     cols = ["ts_event", "instrument_id"] + [
         col for n in range(0, 10)
         for col in [f"bid_px_{str(n).zfill(2)}", f"ask_px_{str(n).zfill(2)}", f"bid_sz_{str(n).zfill(2)}", f"ask_sz_{str(n).zfill(2)}"]
     ]
-    df = df.select(cols)
+    df = df.select(cols).filter(pl.col('instrument_id') == map["CSCO"])
+    print(f"File size (gb): {df.estimated_size('gb'):.2f}")
 
     # Compute markouts at multiple horizons (sampled for efficiency)
     horizon_ns = np.arange(0, 10_000_000, 10_000) # 0 to 10_000us (10ms) in steps of 10us
@@ -49,8 +49,8 @@ if __name__ == "__main__":
     # plt.savefig(f'plots/top_level_markout_{SEED}', dpi=300, bbox_inches='tight')
     # plt.show()
 
-    fig, ax = plt.subplots(2,1)
-    plot_book_imbalance_vs_markout(markouts, horizon_ns=100*1e3, ax=ax[0])
-    plot_book_imbalance_vs_markout(markouts, horizon_ns=1500*1e3, ax=ax[1])
-    plt.tight_layout()
-    plt.show()
+    # fig, ax = plt.subplots(2,1)
+    # plot_book_imbalance_vs_markout(markouts, horizon_ns=100*1e3, ax=ax[0])
+    # plot_book_imbalance_vs_markout(markouts, horizon_ns=1500*1e3, ax=ax[1])
+    # plt.tight_layout()
+    # plt.show()

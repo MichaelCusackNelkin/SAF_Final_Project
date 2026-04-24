@@ -8,7 +8,7 @@ import json
 import polars as pl
 import os
 load_dotenv()
-
+# FIXME: not improving right now.
 
 def _trial_cache_key(
     ticker: str,
@@ -257,14 +257,14 @@ if __name__ == "__main__":
 
     # -- General/Data Params --
     LATENCY = 100 * 1e3                 #100us, ns
-    REPLENISHMENT = 3.00                #poisson rate of replenishment using wall-clock
+    REPLENISHMENT = 5.0                #poisson rate of replenishment using wall-clock
     PARENT_QTY = 5_000
     MAX_WORKERS = 10
-    N_TRIALS = 100_000
-    SEED = 42
+    N_TRIALS = 10_000
+    SEED = 12345
 
     # -- Window Params --
-    HORIZON = 30 * 1e9                  # Window of data to pull for each trial
+    HORIZON = 100 * 1e9                 # Window of data to pull for each trial
     MAX_OVERLAP_NS = HORIZON - 1        # Overlap between trial windows. Strictly less than horizon.
 
     # # -- OBI Params --
@@ -276,7 +276,7 @@ if __name__ == "__main__":
 
     # -- Constant / Hybrid Params --
     DEPTH_LMT = None                    # None or "0X" for the Xth level deep into the book at parent order time.
-    WAIT_NS = 200.0 * 1e6                  # 10ms wait between fills / min interval for OBI
+    WAIT_NS = 200 * 1e6                 # 200 wait between fills / min interval for OBI
     N_CHUNKS = 25
     OBI_THRESHOLD = 0.10                # OBI threshold for entry, +- for buys and sells
     MIN_SHARES = 0                      # unused by constant/hybrid; kept for cache-key consistency
@@ -430,22 +430,6 @@ if __name__ == "__main__":
             seed=SEED,
         )
 
-        # ===========
-        # OBI Trial
-        # ===========
-        # METHOD = "OBI"
-        # trial_args = [(LATENCY, REPLENISHMENT, PARENT_QTY, DEPTH_LMT,
-        #             OBI_THRESHOLD, HORIZON, WAIT_NS, MIN_SHARES, MAX_SIZE, WAIT_NS, N_CHUNKS, METHOD, ts)
-        #             for ts in trial_starts]
-        # cost_obi = load_or_run(
-        #     method=METHOD,
-        #     trial_args=trial_args,
-        #     n_trials=len(trial_starts),
-        #     worker_args=(str(ticker_parquet_path), ticker_id),
-        #     cache_dir=CACHE_DIR,
-        #     max_workers=MAX_WORKERS,
-        #     **shared_kwargs,
-        # )
 
         #================
         # Constant Trial
@@ -498,9 +482,8 @@ if __name__ == "__main__":
         #===========
         # Plotting
         #===========
-
-        plot_hybrid = cost_hybrid
-        plot_constant = cost_constant
+        plot_hybrid = cost_hybrid.with_columns(pl.from_epoch("ts_event", time_unit="ns").alias("ts_event").dt.convert_time_zone('US/Eastern'))
+        plot_constant = cost_constant.with_columns(pl.from_epoch("ts_event", time_unit="ns", ).alias("ts_event").dt.convert_time_zone('US/Eastern'))
         plot_pre = f""
         plot_end = f"N.{N_TRIALS}_T.{TICKER}_H.{HORIZON}_O.{OBI_THRESHOLD}_CH.{N_CHUNKS}_D.{DEPTH_LMT}"
 
@@ -599,4 +582,55 @@ if __name__ == "__main__":
         )
         fig.tight_layout()
         fig.savefig(f"{plot_pre}scatter_{plot_end}.png", dpi=300, bbox_inches="tight")
+        plt.close(fig)
+
+        # -- By Time of Day --
+        plot_hybrid = plot_hybrid.group_by(
+            pl.col("ts_event").dt.time().alias("time"),
+            maintain_order=True).agg(
+                pl.col("parent_arrival_cost").median().alias("median cost"),
+                pl.col("parent_arrival_cost").quantile(0.75).alias("upper qrt"),
+                pl.col("parent_arrival_cost").quantile(0.25).alias("lower qrt")
+                ).sort("time")
+        
+        plot_constant = plot_constant.group_by(
+            pl.col("ts_event").dt.time().alias("time"),
+            maintain_order=True).agg(
+                pl.col("parent_arrival_cost").median().alias("median cost"),
+                pl.col("parent_arrival_cost").quantile(0.75).alias("upper qrt"),
+                pl.col("parent_arrival_cost").quantile(0.25).alias("lower qrt")
+                ).sort("time")
+        from datetime import datetime, date
+        import matplotlib.dates as mdates
+        import matplotlib.ticker as ticker
+        def to_dt(series):
+            return [datetime.combine(date.today(), t) for t in series]
+
+        fig, ax = plt.subplots(figsize=(10, 4))
+        x_hybrid = to_dt(plot_hybrid["time"])
+        ax.plot(x_hybrid, plot_hybrid["median cost"],
+                color="tab:blue", label="hybrid")
+        ax.fill_between(x_hybrid,
+                        plot_hybrid["upper qrt"],
+                        plot_hybrid["lower qrt"],
+                        color="tab:blue", alpha=0.2, linewidth=0)
+
+        x_const = to_dt(plot_constant["time"])
+        ax.plot(x_const, plot_constant["median cost"],
+                color="tab:orange", label="naive")
+        ax.fill_between(x_const,
+                        plot_constant["upper qrt"],
+                        plot_constant["lower qrt"],
+                        color="tab:orange", alpha=0.2, linewidth=0)
+
+        ax.xaxis.set_major_locator(mdates.HourLocator(interval=1))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+        ax.yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
+
+        ax.legend()
+        ax.set_xlabel("Time of Day")
+        ax.set_ylabel("Arrival Cost (bps)")
+        ax.set_title("Median Arrival Cost by Time")
+        ax.grid(True)
+        fig.savefig(f"{plot_pre}time_{plot_end}.png", dpi=300, bbox_inches="tight")
         plt.close(fig)

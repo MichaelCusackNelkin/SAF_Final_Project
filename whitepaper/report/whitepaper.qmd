@@ -39,11 +39,57 @@ format:
 # Abstract
 
 # Motivation and Main Ideas
+Motivation is a way to minimize the cost of an order by taking advantage of favorable price moves and avoiding unfavorable ones.
+
+## Definitions
+- OBi
+- Impact
+- Arrival Cost
+
+## Naive Splitting is Bad
+Moves prices too much
+<!-- ![Naive Order Splitting](){#fig-naive} -->
+
+## OBI Provides a Way to Identify Favorable/Adverse Price Movements
+OBI of the top 6 levels.
+<!-- ![Markouts](){#fig-markouts} -->
 
 # Empirical Findings
 
+## Plot and Descriptive Stats
+
+## Successful: OBI Calibrated Aggression
+<!-- ![Hybrid Plot](){#fig-hybrid} -->
+
+## Test Stats / Significance
+
+## Latency / Replenishment / Time of Day Plots/Stats
+
+<!-- ![Latency Comparison](){#fig-latency} -->
+<!-- ![Replenishment Comparison](){#fig-replenishment} -->
+<!-- ![Time-of-Day Comparison](){#fig-datetime} -->
+
+
 # Methodological Choices and Innovations
 
-# Theoretical Justifications
+## Failed Attempt: OBI Aggressive Only
+Shifting reference frame from alpha to execution (given mandate to buy/sell.)
+Not trying to predict price, but take advantage of price moves.
+<!-- ![OBI Plot](){#fig-OBI} -->
 
-# relationship to Prior Work
+## Failure: hyprid w/ constant fills within-band
+
+
+## Simulator
+<!-- ![Impact Plot](){#fig-sim} -->
+
+### Choice: fixed horizon (time constraint)
+
+
+# Future Work
+
+## Smoothed OBI
+Tried it, got some weird results (no hyperparam tuning, possibly a quirk of replenishment.)
+
+## A Catch-up/Fall-Behind Mechanism
+Currently waiting in-band.
