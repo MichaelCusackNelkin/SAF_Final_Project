@@ -728,6 +728,7 @@ class ExecutionSimulator:
         self,
         side: str,
         parent_size: int,
+        limit: float,
         start_ts_ns: int,
         obi_threshold: float,
         n_slices: int,
@@ -790,7 +791,7 @@ class ExecutionSimulator:
             )
 
             if adverse:
-                r = self.accept_mkt_order(side, size, current_ts)
+                r = self.accept_ioc_lmt_order(side, limit, size, current_ts)
                 results.append(r)
                 remaining -= r["total_filled"]
             elif favorable:
@@ -816,7 +817,7 @@ class ExecutionSimulator:
                     results.append(r)
                     remaining -= r["total_filled"]
             else:
-                r = self.accept_mkt_order(side, size, current_ts)
+                r = self.accept_ioc_lmt_order(side, limit, size, current_ts)
                 results.append(r)
                 remaining -= r["total_filled"]
 
@@ -1111,10 +1112,10 @@ def run_trial(args):
             min_interval_ns=min_ns, min_shares_between=min_shares,
         )
     elif method=="constant":
-        results, _ = sim.constant_ioc_fill(side, lmt, parent_qty, ts, wait_ns=wait_ns, n_chunks=n_chunks)
+        results, _ = sim.constant_ioc_fill(side, None, parent_qty, ts, wait_ns=wait_ns, n_chunks=n_chunks)
     elif method=="hybrid":
         results, _ = sim.hybrid_fill(
-            side, parent_qty, ts,
+            side, parent_qty, lmt, ts,
             obi_threshold=threshold,
             n_slices=n_chunks,
             wait_ns=int(wait_ns),

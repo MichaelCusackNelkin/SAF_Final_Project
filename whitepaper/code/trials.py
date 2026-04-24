@@ -256,15 +256,15 @@ if __name__ == "__main__":
     CACHE_ONLY = False
 
     # -- General/Data Params --
-    LATENCY = 100 * 1e3                 #100us, ns
-    REPLENISHMENT = 5.0                #poisson rate of replenishment using wall-clock
-    PARENT_QTY = 5_000
+    LATENCY = 100 * 1e3                 #Child order latency ns
+    REPLENISHMENT = 29.0                #poisson rate of replenishment using wall-clock
+    PARENT_QTY = 10_000
     MAX_WORKERS = 10
-    N_TRIALS = 10_000
+    N_TRIALS = 5_000
     SEED = 12345
 
     # -- Window Params --
-    HORIZON = 100 * 1e9                 # Window of data to pull for each trial
+    HORIZON = 300 * 1e9                 # Window of data to pull for each trial
     MAX_OVERLAP_NS = HORIZON - 1        # Overlap between trial windows. Strictly less than horizon.
 
     # # -- OBI Params --
@@ -275,9 +275,9 @@ if __name__ == "__main__":
     # MAX_SIZE = 350                      # Maximum child order sizes
 
     # -- Constant / Hybrid Params --
-    DEPTH_LMT = None                    # None or "0X" for the Xth level deep into the book at parent order time.
+    DEPTH_LMT = "09"                    # None or "0X" for the Xth level deep into the book at parent order time.
     WAIT_NS = 200 * 1e6                 # 200 wait between fills / min interval for OBI
-    N_CHUNKS = 25
+    N_CHUNKS = 50
     OBI_THRESHOLD = 0.10                # OBI threshold for entry, +- for buys and sells
     MIN_SHARES = 0                      # unused by constant/hybrid; kept for cache-key consistency
     MAX_SIZE = 0                        # unused by constant/hybrid; kept for cache-key consistency
@@ -484,16 +484,20 @@ if __name__ == "__main__":
         #===========
         plot_hybrid = cost_hybrid.with_columns(pl.from_epoch("ts_event", time_unit="ns").alias("ts_event").dt.convert_time_zone('US/Eastern'))
         plot_constant = cost_constant.with_columns(pl.from_epoch("ts_event", time_unit="ns", ).alias("ts_event").dt.convert_time_zone('US/Eastern'))
-        plot_pre = f""
-        plot_end = f"N.{N_TRIALS}_T.{TICKER}_H.{HORIZON}_O.{OBI_THRESHOLD}_CH.{N_CHUNKS}_D.{DEPTH_LMT}"
+        plot_pre = f"temp_plot_folder/"
+        plot_end = f"mid.{TICKER}"
+        PLOT_DIR = Path("temp_plot_folder")
+        PLOT_DIR.mkdir(exist_ok=True)
 
         # -- Parent Costs --
-        log = True
-        plt.hist(plot_hybrid["parent_arrival_cost"], bins=25, edgecolor="black", color="tab:orange", alpha=0.7, label="OBI", log=log)
-        plt.hist(plot_constant["parent_arrival_cost"], bins=25, edgecolor="black", color="tab:blue", alpha=0.7, label="Constant", log=log)
+        log = False
+        plt.hist(plot_hybrid["parent_arrival_cost"], bins=25, edgecolor="black", color="tab:orange", alpha=0.7, label="Hybrid", log=log)
+        plt.hist(plot_constant["parent_arrival_cost"], bins=25, edgecolor="black", color="tab:blue", alpha=0.7, label="Naive", log=log)
+        plt.axvline(plot_hybrid['parent_arrival_cost'].mean(), color='tab:orange', linestyle='--', linewidth=1, label='hybrid mean')
+        plt.axvline(plot_constant['parent_arrival_cost'].mean(), color='tab:blue', linestyle='--', linewidth=1, label='naive mean')
         plt.xlabel("Cost per Share (bps)")
         plt.ylabel("Count")
-        plt.title("Parent Cost Per Share Comparison: OBI vs Constant IOC")
+        plt.title("Parent Cost Per Share Comparison")
         plt.legend()
         plt.savefig(f"{plot_pre}parent_cost_{plot_end}.png", dpi=300, bbox_inches='tight')
         plt.close()
@@ -501,22 +505,22 @@ if __name__ == "__main__":
         # -- Child Costs --
         fig, ax = plt.subplots(1,2,figsize=(8,4))
         # -- Means --
-        ax[0].hist(plot_hybrid["mean_child_arrival_cost"], bins=25, edgecolor="black", color="tab:orange", alpha=0.7, label="OBI")
-        ax[0].hist(plot_constant["mean_child_arrival_cost"], bins=25, edgecolor="black", color="tab:blue", alpha=0.7, label="Constant")
+        ax[0].hist(plot_hybrid["mean_child_arrival_cost"], bins=25, edgecolor="black", color="tab:orange", alpha=0.7, label="Hybrid")
+        ax[0].hist(plot_constant["mean_child_arrival_cost"], bins=25, edgecolor="black", color="tab:blue", alpha=0.7, label="Naive")
         ax[0].set_xlabel("Cost per Share (bps)")
         ax[0].set_ylabel("Count")
-        ax[0].set_title("Mean Arrival Cost")
+        ax[0].set_title("Mean Cost")
         ax[0].legend()
 
         # -- Medians --
-        ax[1].hist(plot_hybrid["median_child_arrival_cost"], bins=25, edgecolor="black", color="tab:orange", alpha=0.7, label="OBI")
-        ax[1].hist(plot_constant["median_child_arrival_cost"], bins=25, edgecolor="black", color="tab:blue", alpha=0.7, label="Constant")
+        ax[1].hist(plot_hybrid["median_child_arrival_cost"], bins=25, edgecolor="black", color="tab:orange", alpha=0.7, label="Hybrid")
+        ax[1].hist(plot_constant["median_child_arrival_cost"], bins=25, edgecolor="black", color="tab:blue", alpha=0.7, label="Naive")
         ax[1].set_xlabel("Cost per Share (bps)")
         ax[1].set_ylabel("Count")
-        ax[1].set_title("Median Arrival Cost")
+        ax[1].set_title("Median Cost")
         ax[1].legend()
 
-        plt.suptitle("Child Arrival Cost Per Share Comparison: OBI vs Constant IOC ")
+        plt.suptitle("Child Arrival Cost Per Share Comparison")
         plt.tight_layout()
         plt.savefig(f"{plot_pre}child_cost_{plot_end}.png", dpi=300, bbox_inches='tight')
         plt.close()
@@ -526,16 +530,16 @@ if __name__ == "__main__":
         plt.hist(
             plot_hybrid["parent_filled"],
             weights=np.ones(len(plot_hybrid["parent_filled"])) / len(plot_hybrid["parent_filled"]),
-            bins=25, edgecolor="black", color="tab:orange", alpha=0.7, label="OBI"
+            bins=25, edgecolor="black", color="tab:orange", alpha=0.7, label="Hybrid"
             )
         plt.hist(
             plot_constant["parent_filled"],
             weights=np.ones(len(plot_constant["parent_filled"])) / len(plot_constant["parent_filled"]),
-            bins=25, edgecolor="black", color="tab:blue", alpha=0.7, label="Constant"
+            bins=25, edgecolor="black", color="tab:blue", alpha=0.7, label="Naive"
             )
         plt.xlabel("Parent Quantity Filled")
         plt.ylabel("Percent (%)")
-        plt.title("Fill Reliability Comparison: OBI vs Constant IOC")
+        plt.title("Fill Reliability Comparison")
         plt.gca().yaxis.set_major_formatter(PercentFormatter(1))
         plt.legend()
         plt.savefig(f"{plot_pre}fill_reliability_{plot_end}.png", dpi=300, bbox_inches='tight')
@@ -545,16 +549,16 @@ if __name__ == "__main__":
         plt.hist(
             plot_hybrid["lifetime_ns"] / 1e9,
             weights=np.ones(len(plot_hybrid["lifetime_ns"])) / len(plot_hybrid["lifetime_ns"]),
-            bins=25, edgecolor="black", color="tab:orange", alpha=0.7, label="OBI"
+            bins=25, edgecolor="black", color="tab:orange", alpha=0.7, label="Hybrid"
             )
         plt.hist(
             plot_constant["lifetime_ns"] / 1e9,
             weights=np.ones(len(plot_constant["lifetime_ns"])) / len(plot_constant["lifetime_ns"]),
-            bins=25, edgecolor="black", color="tab:blue", alpha=0.7, label="Constant"
+            bins=25, edgecolor="black", color="tab:blue", alpha=0.7, label="Naive"
             )
         plt.xlabel("Lifetime (s)")
         plt.ylabel("Percent (%)")
-        plt.title("Parent Order Lifetime Comparison: OBI vs Constant IOC")
+        plt.title("Parent Order Lifetime Comparison")
         plt.gca().yaxis.set_major_formatter(PercentFormatter(1))
         plt.legend()
         plt.savefig(f"{plot_pre}parent_lifetimes_{plot_end}.png", dpi=300, bbox_inches='tight')
@@ -566,7 +570,7 @@ if __name__ == "__main__":
             plot_hybrid["parent_filled"], plot_hybrid["parent_arrival_cost"],
             color="tab:orange", alpha=0.4, s=8,
         )
-        axes[0].set_title("OBI")
+        axes[0].set_title("Hybrid")
         axes[0].set_xlabel("parent_filled")
         axes[0].set_ylabel("parent_arrival_cost (bps)")
 
@@ -574,7 +578,7 @@ if __name__ == "__main__":
             plot_constant["parent_filled"], plot_constant["parent_arrival_cost"],
             color="tab:blue", alpha=0.4, s=8,
         )
-        axes[1].set_title("Constant")
+        axes[1].set_title("Naive")
         axes[1].set_xlabel("parent_filled")
 
         fig.suptitle(
@@ -585,6 +589,27 @@ if __name__ == "__main__":
         plt.close(fig)
 
         # -- By Time of Day --
+        plot_hybrid = (plot_hybrid.sort("ts_event")
+             .group_by_dynamic(
+                 pl.col("ts_event"), 
+                 every="1m",
+                 closed="right"
+                 )
+             .agg(
+                 pl.col("parent_arrival_cost").mean()
+                 )
+        )
+
+        plot_constant = (plot_constant.sort("ts_event")
+             .group_by_dynamic(
+                 pl.col("ts_event"), 
+                 every="1m",
+                 closed="right"
+                 )
+             .agg(
+                 pl.col("parent_arrival_cost").mean()
+                 )
+)
         plot_hybrid = plot_hybrid.group_by(
             pl.col("ts_event").dt.time().alias("time"),
             maintain_order=True).agg(
@@ -609,19 +634,19 @@ if __name__ == "__main__":
         fig, ax = plt.subplots(figsize=(10, 4))
         x_hybrid = to_dt(plot_hybrid["time"])
         ax.plot(x_hybrid, plot_hybrid["median cost"],
-                color="tab:blue", label="hybrid")
+                color="tab:orange", label="Hybrid")
         ax.fill_between(x_hybrid,
                         plot_hybrid["upper qrt"],
                         plot_hybrid["lower qrt"],
-                        color="tab:blue", alpha=0.2, linewidth=0)
+                        color="tab:orange", alpha=0.2, linewidth=0)
 
         x_const = to_dt(plot_constant["time"])
         ax.plot(x_const, plot_constant["median cost"],
-                color="tab:orange", label="naive")
+                color="tab:blue", label="Naive")
         ax.fill_between(x_const,
                         plot_constant["upper qrt"],
                         plot_constant["lower qrt"],
-                        color="tab:orange", alpha=0.2, linewidth=0)
+                        color="tab:blue", alpha=0.2, linewidth=0)
 
         ax.xaxis.set_major_locator(mdates.HourLocator(interval=1))
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))

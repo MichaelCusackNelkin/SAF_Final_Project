@@ -37,59 +37,79 @@ format:
 
 
 # Abstract
+A fundamental hurdle in trading is the balance between market impact and alpha decay. Submitting a large order leads to significant price impact as it takes the liquidity from the Limit Order Book (LOB). On the other hand, splitting a large order into smaller chunks over seconds or minutes exposes unexecuted orders to alpha decay and price drifts. This hurdle is especially prevalent in crowded markets where thousands of algorithms are trading on similar signals.
+
+Our goal is to measure the average alpha lost when forced to split orders by comparing different execution strategies. This milestone report quanitifies our progress toward this goal. We use markout plots to analyze order book imbalance (OBI) as a predictor to help minimize the cost of chunking orders through price drifts and impact. We then build and validate an order execution simulator, and compare three execution strategies for a large-cap-small-tick equity.
 
 # Motivation and Main Ideas
+<!-- Michael CN -->
 Motivation is a way to minimize the cost of an order by taking advantage of favorable price moves and avoiding unfavorable ones.
 
 ## Definitions
-- OBi
+<!-- Vijeet --> 
+- OBI
 - Impact
 - Arrival Cost
+- Replenishment
 
 ## Naive Splitting is Bad
 Moves prices too much
-<!-- ![Naive Order Splitting](){#fig-naive} -->
+<!-- ![Naive Order Splitting](){#fig-naive} DONE --> 
 
 ## OBI Provides a Way to Identify Favorable/Adverse Price Movements
 OBI of the top 6 levels.
-<!-- ![Markouts](){#fig-markouts} -->
+<!-- ![Markouts](){#fig-markouts} DONE -->
 
-# Empirical Findings
-
-## Plot and Descriptive Stats
-
-## Successful: OBI Calibrated Aggression
-<!-- ![Hybrid Plot](){#fig-hybrid} -->
-
-## Test Stats / Significance
-
-## Latency / Replenishment / Time of Day Plots/Stats
-
-<!-- ![Latency Comparison](){#fig-latency} -->
-<!-- ![Replenishment Comparison](){#fig-replenishment} -->
-<!-- ![Time-of-Day Comparison](){#fig-datetime} -->
 
 
 # Methodological Choices and Innovations
+<!-- Alick -->
 
-## Failed Attempt: OBI Aggressive Only
+## Naive with IOC:
+Helps a lot wiht price, but basically never fills the whole order.
+<!-- ![Naive IOC](){#fig-OBI} -->
+
+## Failure: OBI Aggressive Only
 Shifting reference frame from alpha to execution (given mandate to buy/sell.)
 Not trying to predict price, but take advantage of price moves.
 <!-- ![OBI Plot](){#fig-OBI} -->
 
-## Failure: hyprid w/ constant fills within-band
+## Failure: Hybrid without constant fills within-band
 
+## Successful: Hybrid OBI Calibrated Aggression
+<!-- Michael CN -->
+<!-- ![Hybrid Plot](){#fig-hybrid} DONE -->
 
 ## Simulator
-<!-- ![Impact Plot](){#fig-sim} -->
+<!-- Michael CN -->
+<!-- ![Impact Plot](){#fig-sim} DONE -->
 
-### Choice: fixed horizon (time constraint)
+
+
+# Empirical Findings
+<!-- Michael B -->
+
+## Plot and Descriptive Stats
+
+## Test Stats / Significance
+
+## Latency / Replenishment / Time of Day Plots/Stats
+Table from ilestone showing the effect of latency on OBI fills (not the full hybrid filler).
+<!-- ![Latency Robustness](){#fig-latency} -->
+Low: Mid: X High:
+<!-- ![Replenishment Robustness](){#fig-replenishment} -->
+Low: Mid: X High:
+<!-- ![Time-of-Day Comparison](){#fig-datetime} -->
+
 
 
 # Future Work
+<!-- Debby -->
 
 ## Smoothed OBI
 Tried it, got some weird results (no hyperparam tuning, possibly a quirk of replenishment.)
 
 ## A Catch-up/Fall-Behind Mechanism
 Currently waiting in-band.
+
+## Fixed horizon vs T(v)
