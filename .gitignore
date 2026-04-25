@@ -5,9 +5,6 @@ trial_cache/
 **/trial_cache/
 old_trial_cache/
 **/old_trial_cache/
-*.parquet
-*.feather
-*.arrow
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
