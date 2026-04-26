@@ -35,7 +35,7 @@ if __name__ == "__main__":
     print(f"File size (gb): {df.estimated_size('gb'):.2f}")
 
     # Compute markouts at multiple horizons (sampled for efficiency)
-    horizon_ns = np.arange(0, 10_000_000, 10_000) # 0 to 10_000us (10ms) in steps of 10us
+    horizon_ns = np.arange(0, 10_000_000, 10_000) # 0 to 10ms in steps of 1us
     markouts = compute_markouts(df, horizons_ns=horizon_ns, sample_n=100_000, seed=SEED)
     print(f"Computed markouts for {len(markouts):,} sampled ticks")
 

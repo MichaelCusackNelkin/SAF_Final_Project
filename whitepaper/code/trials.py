@@ -249,6 +249,7 @@ if __name__ == "__main__":
 
     # -- Data Params --
     TICKER_LIST = ["AMZN", "CSCO", "DRH"]
+    # TICKER_LIST = ["CSCO"]
     START = "2026-03-18"
     END = "2026-04-18"
     DATASET = "XNAS.ITCH"
@@ -257,7 +258,7 @@ if __name__ == "__main__":
 
     # -- General/Data Params --
     LATENCY = 100 * 1e3                 #Child order latency ns
-    REPLENISHMENT = 29.0                #poisson rate of replenishment using wall-clock
+    REPLENISHMENT = 15.0                #poisson rate of replenishment using wall-clock
     PARENT_QTY = 10_000
     MAX_WORKERS = 10
     N_TRIALS = 5_000
@@ -268,11 +269,10 @@ if __name__ == "__main__":
     MAX_OVERLAP_NS = HORIZON - 1        # Overlap between trial windows. Strictly less than horizon.
 
     # # -- OBI Params --
-    # WAIT_NS = 0                         #1ms, waiting time between fills for OBI filler, ns
-    # MIN_SHARES = 0                      # waiting time in shares traded between fills for OBI filler
-    # OBI_THRESHOLD = 0.000               # OBI threshold for entry, +- for buys and sells
-    # HORIZON = 2 * 1e9                   # Hard horizon 3s, allowed trading horizon, ns
-    # MAX_SIZE = 350                      # Maximum child order sizes
+    WAIT_NS = 0                         #1ms, waiting time between fills for OBI filler, ns
+    MIN_SHARES = 0                      # waiting time in shares traded between fills for OBI filler
+    OBI_THRESHOLD = 0.85               # OBI threshold for entry, +- for buys and sells
+    MAX_SIZE = 350                      # Maximum child order sizes
 
     # -- Constant / Hybrid Params --
     DEPTH_LMT = "09"                    # None or "0X" for the Xth level deep into the book at parent order time.
@@ -448,6 +448,23 @@ if __name__ == "__main__":
             **shared_kwargs,
         )
 
+        # #================
+        # # OBI Trial
+        # #================
+        # METHOD = "obi"
+        # trial_args = [(LATENCY, REPLENISHMENT, PARENT_QTY, DEPTH_LMT,
+        #             OBI_THRESHOLD, HORIZON, WAIT_NS, MIN_SHARES, MAX_SIZE, WAIT_NS, N_CHUNKS, METHOD, ts)
+        #             for ts in trial_starts]
+        # cost_constant = load_or_run(
+        #     method=METHOD,
+        #     trial_args=trial_args,
+        #     n_trials=len(trial_starts),
+        #     worker_args=(str(ticker_parquet_path), ticker_id),
+        #     cache_dir=CACHE_DIR,
+        #     max_workers=MAX_WORKERS,
+        #     **shared_kwargs,
+        # )
+
         #================
         # Hybrid Trial
         #================
@@ -466,7 +483,7 @@ if __name__ == "__main__":
         )
 
         # -- Descriptive Stats --
-        print("\nOBI Fill Costs")
+        print("\nHybrid Fill Costs")
         print(cost_hybrid.with_columns((pl.col("lifetime_ns") / 1e9).alias("lifetime_s"))
             .select(
                 ["parent_filled", "parent_arrival_cost", "mean_child_arrival_cost", "median_child_arrival_cost", "lifetime_s"]

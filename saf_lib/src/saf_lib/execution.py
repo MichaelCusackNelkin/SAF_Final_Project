@@ -281,8 +281,9 @@ def plot_markout_curves(
             color=cmap(i / denom),
         )
 
-    ax.set_xscale("log")
-    ax.set_xlabel("Time (ns, log)")
+    ax.set_xscale("symlog", linthresh=5_000)
+    ax.set_xlim(left=0)
+    ax.set_xlabel("Time (ns)")
     ax.set_ylabel("Markout (mils)")
     ax.set_title(f"Markout Curves by {signal_col}")
     ax.axhline(0, color="grey", linestyle="--", linewidth=0.8)

@@ -795,7 +795,8 @@ class ExecutionSimulator:
                 results.append(r)
                 remaining -= r["total_filled"]
             elif favorable:
-                expiry = current_ts + wait_ns
+                # expiry = current_ts + wait_ns
+                expiry = current_ts + (300 * 1e9)
                 for level in range(6):
                     if remaining <= 0:
                         break
@@ -1105,14 +1106,14 @@ def run_trial(args):
         lmt = df_at_ts[f"ask_px_{depth_lmt}" if side == "BUY" else f"bid_px_{depth_lmt}"][0]
     else:
         lmt = depth_lmt
-    if method=="OBI":
+    if method=="obi":
         results, _, _ = sim.obi_adaptive_fill(
             side, parent_qty, ts, limit_price=lmt,
             max_size=max_size, threshold=threshold, horizon=horizon,
             min_interval_ns=min_ns, min_shares_between=min_shares,
         )
     elif method=="constant":
-        results, _ = sim.constant_ioc_fill(side, None, parent_qty, ts, wait_ns=wait_ns, n_chunks=n_chunks)
+        results, _ = sim.constant_ioc_fill(side, lmt, parent_qty, ts, wait_ns=wait_ns, n_chunks=n_chunks)
     elif method=="hybrid":
         results, _ = sim.hybrid_fill(
             side, parent_qty, lmt, ts,
@@ -1128,7 +1129,8 @@ def run_trial(args):
     df_at_ts = df_window.filter(pl.col("ts_nano") == ts)
     if df_at_ts.is_empty():
         return None
-    p0 = df_at_ts["mid"][0]
+    
+    p0 = df_at_ts["ask_px_00"][0] if side == "BUY" else df_at_ts["bid_px_00"][0]
 
     mean_child_arrival_cost = np.mean([r["arrival_cost"] for r in filled_results]) * 10_000
     median_child_arrival_cost = np.median([r["arrival_cost"] for r in filled_results]) * 10_000
