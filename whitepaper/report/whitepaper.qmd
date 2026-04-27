@@ -86,31 +86,79 @@ As discussed and plotted earlier, we are comparing our stragies with the naive m
 #| echo: false
 
 import json
-import sys
+import hashlib
 from pathlib import Path
+import pandas as pd
 import polars as pl
 
-sys.path.insert(0, str(Path("../code")))
-from trials import _trial_cache_key
+def _find_report_dir() -> Path:
+    for candidate in [Path.cwd(), Path.cwd() / "whitepaper" / "report"]:
+        if (candidate / "plots_and_data").exists():
+            return candidate
+    raise FileNotFoundError("Could not locate whitepaper/report/plots_and_data")
+
+REPORT_DIR = _find_report_dir()
+DATA_ROOT = REPORT_DIR / "plots_and_data"
+
+def _trial_cache_key(
+    ticker: str,
+    start: str,
+    end: str,
+    latency: float,
+    replenishment: float,
+    parent_qty: int,
+    depth_lmt: str,
+    OBI_THRESHOLD: float,
+    horizon: float,
+    min_ns: float,
+    min_shares: int,
+    max_size: int,
+    wait_ns: float,
+    n_chunks: int,
+    max_overlap_ns: float,
+    method: str,
+    n_trials: int,
+    seed: int,
+) -> str:
+    payload = {
+        "ticker": ticker,
+        "start": start,
+        "end": end,
+        "latency": latency,
+        "replenishment": replenishment,
+        "parent_qty": parent_qty,
+        "depth_lmt": depth_lmt,
+        "OBI_THRESHOLD": OBI_THRESHOLD,
+        "horizon": horizon,
+        "min_ns": min_ns,
+        "min_shares": min_shares,
+        "max_size": max_size,
+        "wait_ns": wait_ns,
+        "n_chunks": n_chunks,
+        "max_overlap_ns": max_overlap_ns,
+        "method": method,
+        "n_trials": n_trials,
+        "seed": seed,
+    }
+    serialized = json.dumps(payload, sort_keys=True, default=str)
+    return hashlib.md5(serialized.encode("utf-8")).hexdigest()
 
 def load_pair(hybrid_parquet: Path, pre = None):
     """Given a hybrid parquet path, load it and its matching constant parquet."""
-    if pre:
-      params_path = CACHE_DIR / f"{pre}/{hybrid_parquet.stem}.json"
-    else:
-      params_path = CACHE_DIR / f"{hybrid_parquet.stem}.json"
+    params_path = hybrid_parquet.with_suffix(".json")
     with open(params_path) as f:
         params = json.load(f)
 
     const_key = _trial_cache_key(**{**params, "method": "constant"})
-    if pre:
-      const_path = CACHE_DIR / f"{pre}/{const_key}.parquet"
-    else:
-      const_path = CACHE_DIR / f"{const_key}.parquet"
+    const_path = hybrid_parquet.parent / f"{const_key}.parquet"
 
     hybrid_df = pl.read_parquet(hybrid_parquet)
     const_df = pl.read_parquet(const_path)
     return hybrid_df, const_df, params
+
+def report_table(df: pl.DataFrame) -> pd.DataFrame:
+    """Return a pandas table so Quarto renders captions/crossrefs reliably."""
+    return pd.DataFrame(df.to_dicts())
 ```
 
 ```{python}
@@ -120,14 +168,14 @@ def load_pair(hybrid_parquet: Path, pre = None):
 
 
 # --- pick a parquet to inspect ---
-CACHE_DIR = Path("plots_and_data/section_3/latency_data/mid/")
+CACHE_DIR = DATA_ROOT / "section_3/latency_data/mid"
 path = CACHE_DIR / "1a9db328aaf8382791779f4075474cee.parquet"
 
 hybrid_df, const_df, params = load_pair(path)
 cols = ['parent_filled', 'parent_arrival_cost', 'mean_child_arrival_cost', 'median_child_arrival_cost', 'lifetime_s']
 result = const_df.with_columns((pl.col("lifetime_ns") / 1e9).alias("lifetime_s")).select(cols).describe().rename({'parent_arrival_cost': 'parent_cost', "mean_child_arrival_cost": "mean_child_cost", "median_child_cost": "median_child_cost", 'parent_filled': 'total_filled'})
 
-result.filter(pl.col("statistic").is_in(['mean', 'min', '25%', '50%', '75%', 'max']))
+report_table(result.filter(pl.col("statistic").is_in(['mean', 'min', '25%', '50%', '75%', 'max'])))
 ```
 
 
@@ -140,14 +188,14 @@ The first pass attempt to improve on the benchmark is simply running the same st
 #|label: tbl-naive-ioc
 
 # --- pick a parquet to inspect ---
-CACHE_DIR = Path("plots_and_data/section_2/failed_runs/")
+CACHE_DIR = DATA_ROOT / "section_2/failed_runs"
 path = CACHE_DIR / "3890ab215531e0d7c7cf3bc62ae6bf40.parquet"
 
 hybrid_df, const_df, params = load_pair(path)
 cols = ['parent_filled', 'parent_arrival_cost', 'mean_child_arrival_cost', 'median_child_arrival_cost', 'lifetime_s']
 result = const_df.with_columns((pl.col("lifetime_ns") / 1e9).alias("lifetime_s")).select(cols).describe().rename({'parent_arrival_cost': 'parent_cost', "mean_child_arrival_cost": "mean_child_cost", "median_child_cost": "median_child_cost", 'parent_filled': 'total_filled'})
 
-result.filter(pl.col("statistic").is_in(['mean', 'min', '25%', '50%', '75%', 'max']))
+report_table(result.filter(pl.col("statistic").is_in(['mean', 'min', '25%', '50%', '75%', 'max'])))
 ```
 
 ## Failure: OBI Aggressive Only
@@ -184,7 +232,7 @@ from IPython.display import Markdown, display
 
 
 # --- pick a parquet to inspect ---
-CACHE_DIR = Path("plots_and_data/section_3/successful_run/cost_data")
+CACHE_DIR = DATA_ROOT / "section_3/successful_run/cost_data"
 path = CACHE_DIR / "204b0a2f144401b56ae861cbac7ec2a6.parquet"
 
 hybrid_df, const_df, params = load_pair(path)
@@ -197,14 +245,14 @@ result = (
   .rename({'parent_arrival_cost': 'parent_cost', "mean_child_arrival_cost": "mean_child_cost", "median_child_cost": "median_child_cost"})
 )
 
-display(result.filter(pl.col("statistic").is_in(['mean', 'min', '25%', '50%', '75%', 'max'])))
+display(report_table(result.filter(pl.col("statistic").is_in(['mean', 'min', '25%', '50%', '75%', 'max']))))
 
 #=============
 # CSCO
 #=============
 
 # --- pick a parquet to inspect ---
-CACHE_DIR = Path("plots_and_data/section_3/successful_run/cost_data")
+CACHE_DIR = DATA_ROOT / "section_3/successful_run/cost_data"
 path = CACHE_DIR / "1a9db328aaf8382791779f4075474cee.parquet"
 
 hybrid_df, const_df, params = load_pair(path)
@@ -216,14 +264,14 @@ result = (
   .rename({'parent_arrival_cost': 'parent_cost', "mean_child_arrival_cost": "mean_child_cost", "median_child_cost": "median_child_cost"})
 )
 
-display(result.filter(pl.col("statistic").is_in(['mean', 'min', '25%', '50%', '75%', 'max'])))
+display(report_table(result.filter(pl.col("statistic").is_in(['mean', 'min', '25%', '50%', '75%', 'max']))))
 
 #=============
 # DRH
 #=============
 
 # --- pick a parquet to inspect ---
-CACHE_DIR = Path("plots_and_data/section_3/successful_run/cost_data")
+CACHE_DIR = DATA_ROOT / "section_3/successful_run/cost_data"
 path = CACHE_DIR / "9a484a1ba943b069d31bbc4aeb70b1a7.parquet"
 
 hybrid_df, const_df, params = load_pair(path)
@@ -235,7 +283,7 @@ result = (
   .rename({'parent_arrival_cost': 'parent_cost', "mean_child_arrival_cost": "mean_child_cost", "median_child_cost": "median_child_cost"})
 )
 
-display(result.filter(pl.col("statistic").is_in(['mean', 'min', '25%', '50%', '75%', 'max'])))
+display(report_table(result.filter(pl.col("statistic").is_in(['mean', 'min', '25%', '50%', '75%', 'max']))))
 ```
 
 ## Test Stats / Significance
@@ -247,7 +295,7 @@ display(result.filter(pl.col("statistic").is_in(['mean', 'min', '25%', '50%', '7
 
 from scipy import stats
 # --- pick a parquet to inspect ---
-CACHE_DIR = Path("plots_and_data/section_3/successful_run/cost_data")
+CACHE_DIR = DATA_ROOT / "section_3/successful_run/cost_data"
 hybrid_paths = [
   "204b0a2f144401b56ae861cbac7ec2a6.parquet", # AMZN
   "1a9db328aaf8382791779f4075474cee.parquet", # CSCO
@@ -274,7 +322,7 @@ for p, ticker in zip(hybrid_paths, tickers):
   })
 
 df = pl.DataFrame(data)
-df
+report_table(df)
 
 ```
 
@@ -286,9 +334,8 @@ Table from ilestone showing the effect of latency on hybrid filler
 #|tbl-cap: "Effects of Latency"
 #|label: tbl-latency
 
-from scipy import stats
 # --- pick a parquet to inspect ---
-CACHE_DIR = Path("plots_and_data/section_3/latency_data/")
+CACHE_DIR = DATA_ROOT / "section_3/latency_data"
 hybrid_paths = [
   ("low/974b77b083e087c8108ea24d5563cd48.parquet", "CSCO", "low"),
   ("low/d41ed8fb8e47884319c37084fd0ec75b.parquet", "AMZN", "low"),
@@ -316,7 +363,7 @@ for p, ticker, level in hybrid_paths:
   })
 
 df = pl.DataFrame(data)
-df
+report_table(df)
 ```
 
 ## Effects of Replenishment
@@ -325,9 +372,8 @@ df
 #|tbl-cap: "Effects of Replenishment"
 #|label: tbl-replenishment
 
-from scipy import stats
 # --- pick a parquet to inspect ---
-CACHE_DIR = Path("plots_and_data/section_3/replenishment_data/")
+CACHE_DIR = DATA_ROOT / "section_3/replenishment_data"
 hybrid_paths = [
   ("low/066d1d787a1148b4a53c40a6c8a750ba.parquet", "CSCO", "low"),
   ("low/13675423747362b1fad48b2114aaa90e.parquet", "AMZN", "low"),
@@ -355,7 +401,7 @@ for p, ticker, level in hybrid_paths:
   })
 
 df = pl.DataFrame(data)
-df
+report_table(df)
 ```
 
 ## Intraday Seasonality

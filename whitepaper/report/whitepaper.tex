@@ -66,6 +66,7 @@
 
 
 \usepackage{longtable,booktabs,array}
+\newcounter{none} % for unnumbered tables
 \usepackage{calc} % for calculating minipage widths
 % Correct order of tables after \paragraph or \subparagraph
 \usepackage{etoolbox}
@@ -240,7 +241,7 @@ example of splitting a 5000-share order into twenty-five 200-share buy
 fills shows the significant impact of repeatedly lifting the ask
 overtime. The underperformance of this strategy nessesitates a more
 intelligent way to split and fill large orders. \begin{center}
-\includegraphics[width=0.7\linewidth,height=\textheight,keepaspectratio]{plots_and_data/section_1/naive_new.png}
+\includegraphics[width=0.7\linewidth,height=\textheight,keepaspectratio,alt={Naive Order Splitting}]{plots_and_data/section_1/naive_new.png}
 \end{center}
 
 \subsection{Book Imbalance as a Primary
@@ -359,28 +360,31 @@ using regular market orders. Below in Table~\ref{tbl-naive} are some
 performance metrics for this naive method to serve as a benchmark we are
 competing against.
 
-\begin{longtable}[]{@{}llllll@{}}
+{
+
+\begin{longtable}[]{@{}lllllll@{}}
 
 \caption{\label{tbl-naive}Naive Results}
 
 \tabularnewline
 
 \toprule\noalign{}
-statistic & total\_filled & parent\_cost & mean\_child\_cost &
+& statistic & total\_filled & parent\_cost & mean\_child\_cost &
 median\_child\_arrival\_cost & lifetime\_s \\
-str & f64 & f64 & f64 & f64 & f64 \\
 \midrule\noalign{}
 \endhead
 \bottomrule\noalign{}
 \endlastfoot
-"mean" & 10000.0 & 9.8626 & 5.798219 & 4.182775 & 9.582253 \\
-"min" & 10000.0 & -21.535187 & 1.374581 & 0.580619 & 6.221948 \\
-"25\%" & 10000.0 & 6.428417 & 3.883612 & 3.316627 & 9.524487 \\
-"50\%" & 10000.0 & 9.053304 & 5.149228 & 3.90504 & 9.687721 \\
-"75\%" & 10000.0 & 12.472484 & 7.069212 & 4.637834 & 9.761385 \\
-"max" & 10000.0 & 61.71924 & 36.425326 & 35.814917 & 9.800094 \\
+0 & mean & 10000.0 & 9.862600 & 5.798219 & 4.182775 & 9.582253 \\
+1 & min & 10000.0 & -21.535187 & 1.374581 & 0.580619 & 6.221948 \\
+2 & 25\% & 10000.0 & 6.428417 & 3.883612 & 3.316627 & 9.524487 \\
+3 & 50\% & 10000.0 & 9.053304 & 5.149228 & 3.905040 & 9.687721 \\
+4 & 75\% & 10000.0 & 12.472484 & 7.069212 & 4.637834 & 9.761385 \\
+5 & max & 10000.0 & 61.719240 & 36.425326 & 35.814917 & 9.800094 \\
 
 \end{longtable}
+
+}
 
 \subsection{Failure: Naive with IOC}\label{failure-naive-with-ioc}
 
@@ -393,28 +397,31 @@ order at the initial time of execution. This resulted in better fills,
 however it almost never completed hte full parent order given it's
 simple cap on the allowed execution price.
 
-\begin{longtable}[]{@{}llllll@{}}
+{
+
+\begin{longtable}[]{@{}lllllll@{}}
 
 \caption{\label{tbl-naive-ioc}Naive IOC Results}
 
 \tabularnewline
 
 \toprule\noalign{}
-statistic & total\_filled & parent\_cost & mean\_child\_cost &
+& statistic & total\_filled & parent\_cost & mean\_child\_cost &
 median\_child\_arrival\_cost & lifetime\_s \\
-str & f64 & f64 & f64 & f64 & f64 \\
 \midrule\noalign{}
 \endhead
 \bottomrule\noalign{}
 \endlastfoot
-"mean" & 7818.5352 & 5.28774 & 3.374856 & 3.293796 & 8.880517 \\
-"min" & 200.0 & -21.525161 & 1.207293 & 0.580619 & 0.0 \\
-"25\%" & 6838.0 & 4.482656 & 3.052005 & 2.950195 & 8.446878 \\
-"50\%" & 7905.0 & 5.518874 & 3.353437 & 3.200819 & 9.370963 \\
-"75\%" & 8967.0 & 6.410203 & 3.658963 & 3.726398 & 9.709241 \\
-"max" & 10000.0 & 29.237672 & 16.116962 & 15.40023 & 9.800094 \\
+0 & mean & 7818.5352 & 5.287740 & 3.374856 & 3.293796 & 8.880517 \\
+1 & min & 200.0000 & -21.525161 & 1.207293 & 0.580619 & 0.000000 \\
+2 & 25\% & 6838.0000 & 4.482656 & 3.052005 & 2.950195 & 8.446878 \\
+3 & 50\% & 7905.0000 & 5.518874 & 3.353437 & 3.200819 & 9.370963 \\
+4 & 75\% & 8967.0000 & 6.410203 & 3.658963 & 3.726398 & 9.709241 \\
+5 & max & 10000.0000 & 29.237672 & 16.116962 & 15.400230 & 9.800094 \\
 
 \end{longtable}
+
+}
 
 \subsection{Failure: OBI Aggressive
 Only}\label{failure-obi-aggressive-only}
@@ -476,7 +483,7 @@ Aggression}\label{successful-strategy-hybrid-obi-calibrated-aggression}
 
 \caption{\label{tbl-success}OBI Calibrated Aggression}
 
-\begin{minipage}{0.35\linewidth}
+\begin{minipage}[t]{0.35\linewidth}
 
 \begin{figure*}[H]
 
@@ -484,17 +491,16 @@ Aggression}\label{successful-strategy-hybrid-obi-calibrated-aggression}
 
 \centering{
 
-\begin{tabular}{llll}
+\begin{tabular}{lllll}
 \toprule
-statistic & parent\_cost & mean\_child\_cost & lifetime\_s\\
+ & statistic & parent\_cost & mean\_child\_cost & lifetime\_s\\
 \midrule
-str & f64 & f64 & f64\\
-"mean" & 0.184687 & -0.508529 & 28.482708\\
-"min" & -18.378149 & -9.542207 & 0.0\\
-"25\%" & -1.215225 & -1.549884 & 6.433403\\
-"50\%" & 0.069449 & -0.757397 & 13.0227\\
-"75\%" & 1.365203 & 0.507965 & 27.275029\\
-"max" & 40.170454 & 2.330946 & 299.604724\\
+0 & mean & 0.184687 & -0.508529 & 28.482708\\
+1 & min & -18.378149 & -9.542207 & 0.000000\\
+2 & 25\% & -1.215225 & -1.549884 & 6.433403\\
+3 & 50\% & 0.069449 & -0.757397 & 13.022700\\
+4 & 75\% & 1.365203 & 0.507965 & 27.275029\\
+5 & max & 40.170454 & 2.330946 & 299.604724\\
 \bottomrule
 \end{tabular}
 
@@ -504,10 +510,10 @@ str & f64 & f64 & f64\\
 
 \end{minipage}%
 %
-\begin{minipage}{0.30\linewidth}
+\begin{minipage}[t]{0.30\linewidth}
 ~\end{minipage}%
 %
-\begin{minipage}{0.35\linewidth}
+\begin{minipage}[t]{0.35\linewidth}
 
 \begin{figure*}[H]
 
@@ -515,17 +521,16 @@ str & f64 & f64 & f64\\
 
 \centering{
 
-\begin{tabular}{llll}
+\begin{tabular}{lllll}
 \toprule
-statistic & parent\_cost & mean\_child\_cost & lifetime\_s\\
+ & statistic & parent\_cost & mean\_child\_cost & lifetime\_s\\
 \midrule
-str & f64 & f64 & f64\\
-"mean" & 1.496204 & -0.109473 & 32.403243\\
-"min" & -37.34349 & -13.824266 & 0.0\\
-"25\%" & -2.495476 & -3.533627 & 9.64752\\
-"50\%" & 2.133194 & 0.249334 & 15.597951\\
-"75\%" & 5.022137 & 3.028982 & 28.05321\\
-"max" & 27.74481 & 5.518933 & 299.878286\\
+0 & mean & 1.496204 & -0.109473 & 32.403243\\
+1 & min & -37.343490 & -13.824266 & 0.000000\\
+2 & 25\% & -2.495476 & -3.533627 & 9.647520\\
+3 & 50\% & 2.133194 & 0.249334 & 15.597951\\
+4 & 75\% & 5.022137 & 3.028982 & 28.053210\\
+5 & max & 27.744810 & 5.518933 & 299.878286\\
 \bottomrule
 \end{tabular}
 
@@ -535,7 +540,7 @@ str & f64 & f64 & f64\\
 
 \end{minipage}%
 \newline
-\begin{minipage}{\linewidth}
+\begin{minipage}[t]{\linewidth}
 
 \begin{figure*}[H]
 
@@ -543,17 +548,16 @@ str & f64 & f64 & f64\\
 
 \centering{
 
-\begin{tabular}{llll}
+\begin{tabular}{lllll}
 \toprule
-statistic & parent\_cost & mean\_child\_cost & lifetime\_s\\
+ & statistic & parent\_cost & mean\_child\_cost & lifetime\_s\\
 \midrule
-str & f64 & f64 & f64\\
-"mean" & 25.47164 & 10.770199 & 75.61788\\
-"min" & -62.935586 & -92.823939 & 0.0\\
-"25\%" & 0.963938 & -5.316321 & 9.051737\\
-"50\%" & 28.342588 & 15.368545 & 31.240362\\
-"75\%" & 40.402367 & 23.090175 & 115.460249\\
-"max" & 390.002103 & 200.59842 & 299.998009\\
+0 & mean & 25.471640 & 10.770199 & 75.617880\\
+1 & min & -62.935586 & -92.823939 & 0.000000\\
+2 & 25\% & 0.963938 & -5.316321 & 9.051737\\
+3 & 50\% & 28.342588 & 15.368545 & 31.240362\\
+4 & 75\% & 40.402367 & 23.090175 & 115.460249\\
+5 & max & 390.002103 & 200.598420 & 299.998009\\
 \bottomrule
 \end{tabular}
 
@@ -567,87 +571,96 @@ str & f64 & f64 & f64\\
 
 \subsection{Test Stats / Significance}\label{test-stats-significance}
 
-\begin{longtable}[]{@{}lllll@{}}
+{
+
+\begin{longtable}[]{@{}llllll@{}}
 
 \caption{\label{tbl-tstat}T-Test Significance}
 
 \tabularnewline
 
 \toprule\noalign{}
-symbol & hybrid mean & naive mean & t\_stat & p\_val \\
-str & f64 & f64 & f64 & f64 \\
+& symbol & hybrid mean & naive mean & t\_stat & p\_val \\
 \midrule\noalign{}
 \endhead
 \bottomrule\noalign{}
 \endlastfoot
-"AMZN" & 0.18 & 1.59 & 35.97 & 0.0 \\
-"CSCO" & 1.5 & 5.24 & 56.5 & 0.0 \\
-"DRH" & 25.47 & 54.43 & 48.42 & 0.0 \\
+0 & AMZN & 0.18 & 1.59 & 35.97 & 0.0 \\
+1 & CSCO & 1.50 & 5.24 & 56.50 & 0.0 \\
+2 & DRH & 25.47 & 54.43 & 48.42 & 0.0 \\
 
 \end{longtable}
+
+}
 
 \subsection{Effects of Latency}\label{effects-of-latency}
 
 Table from ilestone showing the effect of latency on hybrid filler
 
-\begin{longtable}[]{@{}lllll@{}}
+{
+
+\begin{longtable}[]{@{}llllll@{}}
 
 \caption{\label{tbl-latency}Effects of Latency}
 
 \tabularnewline
 
 \toprule\noalign{}
-symbol & hybrid mean & naive mean & latency (ns) & latency\_level \\
-str & f64 & f64 & f64 & str \\
+& symbol & hybrid mean & naive mean & latency (ns) & latency\_level \\
 \midrule\noalign{}
 \endhead
 \bottomrule\noalign{}
 \endlastfoot
-"CSCO" & 4.19 & 9.76 & 10000.0 & "low" \\
-"AMZN" & 1.36 & 4.3 & 10000.0 & "low" \\
-"DRH" & 35.53 & 88.32 & 10000.0 & "low" \\
-"CSCO" & 4.19 & 9.86 & 100000.0 & "mid" \\
-"AMZN" & 1.42 & 4.17 & 100000.0 & "mid" \\
-"DRH" & 35.62 & 88.36 & 100000.0 & "mid" \\
-"CSCO" & 4.38 & 10.27 & 5e7 & "high" \\
-"AMZN" & 1.35 & 4.37 & 5e7 & "high" \\
-"DRH" & 35.64 & 88.54 & 5e7 & "high" \\
+0 & CSCO & 4.19 & 9.76 & 10000.0 & low \\
+1 & AMZN & 1.36 & 4.30 & 10000.0 & low \\
+2 & DRH & 35.53 & 88.32 & 10000.0 & low \\
+3 & CSCO & 4.19 & 9.86 & 100000.0 & mid \\
+4 & AMZN & 1.42 & 4.17 & 100000.0 & mid \\
+5 & DRH & 35.62 & 88.36 & 100000.0 & mid \\
+6 & CSCO & 4.38 & 10.27 & 50000000.0 & high \\
+7 & AMZN & 1.35 & 4.37 & 50000000.0 & high \\
+8 & DRH & 35.64 & 88.54 & 50000000.0 & high \\
 
 \end{longtable}
 
+}
+
 \subsection{Effects of Replenishment}\label{effects-of-replenishment}
 
-\begin{longtable}[]{@{}lllll@{}}
+{
+
+\begin{longtable}[]{@{}llllll@{}}
 
 \caption{\label{tbl-replenishment}Effects of Replenishment}
 
 \tabularnewline
 
 \toprule\noalign{}
-symbol & hybrid mean & naive mean & replenishment &
+& symbol & hybrid mean & naive mean & replenishment &
 replenishment\_level \\
-str & f64 & f64 & f64 & str \\
 \midrule\noalign{}
 \endhead
 \bottomrule\noalign{}
 \endlastfoot
-"CSCO" & 5.37 & 13.63 & 1.0 & "low" \\
-"AMZN" & 2.03 & 6.9 & 1.0 & "low" \\
-"DRH" & 42.01 & 94.8 & 1.0 & "low" \\
-"CSCO" & 4.19 & 9.86 & 15.0 & "mid" \\
-"AMZN" & 1.42 & 4.17 & 15.0 & "mid" \\
-"DRH" & 35.62 & 88.36 & 15.0 & "mid" \\
-"CSCO" & 3.89 & 8.03 & 29.0 & "high" \\
-"AMZN" & 1.35 & 3.09 & 29.0 & "high" \\
-"DRH" & 35.05 & 84.7 & 29.0 & "high" \\
+0 & CSCO & 5.37 & 13.63 & 1.0 & low \\
+1 & AMZN & 2.03 & 6.90 & 1.0 & low \\
+2 & DRH & 42.01 & 94.80 & 1.0 & low \\
+3 & CSCO & 4.19 & 9.86 & 15.0 & mid \\
+4 & AMZN & 1.42 & 4.17 & 15.0 & mid \\
+5 & DRH & 35.62 & 88.36 & 15.0 & mid \\
+6 & CSCO & 3.89 & 8.03 & 29.0 & high \\
+7 & AMZN & 1.35 & 3.09 & 29.0 & high \\
+8 & DRH & 35.05 & 84.70 & 29.0 & high \\
 
 \end{longtable}
+
+}
 
 \subsection{Intraday Seasonality}\label{intraday-seasonality}
 
 \begin{figure}
 
-\begin{minipage}{\linewidth}
+\begin{minipage}[t]{\linewidth}
 
 \centering{
 
@@ -659,7 +672,7 @@ str & f64 & f64 & f64 & str \\
 
 \end{minipage}%
 \newline
-\begin{minipage}{\linewidth}
+\begin{minipage}[t]{\linewidth}
 
 \centering{
 
@@ -671,7 +684,7 @@ str & f64 & f64 & f64 & str \\
 
 \end{minipage}%
 \newline
-\begin{minipage}{\linewidth}
+\begin{minipage}[t]{\linewidth}
 
 \centering{
 
@@ -710,7 +723,7 @@ definitions. We lay them out below for reference.
 \item
   OBI: We define order book imbalnce (OBI) using the top \emph{six}
   levels of the book, as follows:
-  \begin{equation}\phantomsection\label{eq-obi}{
+  \begin{equation}\protect\phantomsection\label{eq-obi}{
   \begin{split}
   OBI = \frac{\Sigma_{i=0}^5 Q_{i}^{bid} - \Sigma_{i=0}^5 Q_{i}^{ask}}{\Sigma_{i=0}^5 [Q_{i}^{bid} + Q_{i}^{ask}]}\in [-1, 1]
   \end{split}
@@ -722,7 +735,7 @@ definitions. We lay them out below for reference.
   book simulation is discussed in Section~\ref{sec-sim}, and includes
   further information on impact as well as replenishment adn latency.
   \begin{center}
-  \includegraphics[width=0.7\linewidth,height=\textheight,keepaspectratio]{plots_and_data/appendix/impact.png}
+  \includegraphics[width=0.7\linewidth,height=\textheight,keepaspectratio,alt={Mechanical Impact}]{plots_and_data/appendix/impact.png}
   \end{center}
 \item
   Arrival Cost: When referring to arrival cost of a parent or child
@@ -734,7 +747,7 @@ definitions. We lay them out below for reference.
   child orders, the mean and median arrival costs are calculated across
   child orders for a given parent. Below, \(q_i\) and \(p_i\) are the
   individual fill's quantities and prices respectively.
-  \begin{equation}\phantomsection\label{eq-vwap}{
+  \begin{equation}\protect\phantomsection\label{eq-vwap}{
   \begin{split}
   p_{vwap} &= \frac{\Sigma_{i=0}^nq_i\,p_i}{\Sigma_{i=0}^nq_i}\\ 
   \text{ArrivalCost (bps)} &= \frac{p_{vwap} - p_{mid}}{p_{mid}} * 10^4
