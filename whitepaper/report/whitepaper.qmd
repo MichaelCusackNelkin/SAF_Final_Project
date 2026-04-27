@@ -47,7 +47,7 @@ Definitions of key terms and calculations is provided in @sec-definitions.
 A fundamental hurdle in medium-frequency systematic trading is the balance between arrival cost and immediacy. Submitting a very large marketable order leads to significant price impact as it takes liquidity from the limit order book. On the other hand, splitting a parent order into smaller chunks over seconds or minutes exposes child fills to adverse price drifts, and when done naively also leads to significant price impact. The goal of this work is to reduce the total arrival cost of a parent order by intelligently calibrating the aggression of child orders to take advantage of favorable price movements while avoiding unfavorable ones.
 
 ## Underperformance of Naive Splitting
-Unfortunately, naively splitting a parent order into $n$ chunks and filling them as market orders $\tau$ time units apart has high impact and exposes the parent order to significant price drifts. The below example of splitting a 5000-share order into twenty-five 200-share buy fills shows the significant impact of repeatedly lifting the ask overtime. The underperformance of this strategy nessesitates a more intelligent way to split and fill large orders.
+Unfortunately, naively splitting a parent order into $n$ chunks and filling them as market orders $\delta t$ time units apart has high impact and exposes the parent order to significant price drifts. The below example of splitting a 5000-share order into twenty-five 200-share buy fills shows the significant impact of repeatedly lifting the ask overtime. The underperformance of this strategy nessesitates a more intelligent way to split and fill large orders.
 ![Naive Order Splitting](plots_and_data/section_1/naive_new.png){#fig-naive fig-align="center" width=70%}
 
 ## Book Imbalance as a Primary Signal
@@ -69,6 +69,25 @@ We use L2 data for three tickers, `AMZN`, `CSCO`, and `DRH` from `"2026-03-18":"
 
 ## Simulator {#sec-sim}
 <!-- Michael CN -->
+To allow us to simulate fills using `MBP1-10` data we built an `ExecutionSimulator` class which can:
+
+1. Simulate the execution of market orders, resting limit orders, and immediate-or-cancel (IOC) limit orders at a given nanosecond timestamp and latency.
+2. Maintain an orderbook state over time, using L2 data from the `DatabentoGenericAdapter`, consistent with mutations of the book caused by simulated fills and the replenishment of the swept levels via a Poisson process with book-update time sampling.
+3. Simulate and track execution statistics (arrival cost, fill times, quantities, etc.) for an arbitrary execution strategy using the above order types.
+
+Our implementation of the `ExecutionSimulator` class initiates the L2 book with a `polars` dataframe in Databento's `MBP-10` schema. The simulator maintains the book using internally consistent `numpy` arrays, which it updates as the book mutates via simulated fills. At the end of a simulation it returns a new `polars` dataframe representing the mutated book over time (sampled at book-update events). After each simulated order is filled (mainly child orders) the simulator returns a dictionary of the form below. Note from @sec-definitions that `arrival_cost` is calculated as the `vwap` minus the mid price at execution.
+```{python}
+#| output: false
+{'vwap': 211.9365352112676,
+ 'fills': [(211.93, 246), (211.94, 464)],
+ 'total_filled': 710,
+ 'levels_swept': 1,
+ 'executed_at_ns': 1774538471626080001,
+ 'executed_at_idx': 4078073,
+ 'arrival_cost': 0.02153521126757596}
+```
+
+At each update of the book (sampled from the true data) the book also replenishes any levels swept by simulated fills. To accomplish this it uses a Poisson process to determine the rate of replenishment. When a replenishment occurs at a given level, that level is refilled with a 100 share order for the price the level was previously swept at.
 
 ## Strategy Evaluation
 To evaluate each of the following strategies, we utilize a parallel processing trial workflow. At initialization, we set the numerous required hyperparameters, each listed below. 
@@ -86,79 +105,31 @@ As discussed and plotted earlier, we are comparing our stragies with the naive m
 #| echo: false
 
 import json
-import hashlib
+import sys
 from pathlib import Path
-import pandas as pd
 import polars as pl
 
-def _find_report_dir() -> Path:
-    for candidate in [Path.cwd(), Path.cwd() / "whitepaper" / "report"]:
-        if (candidate / "plots_and_data").exists():
-            return candidate
-    raise FileNotFoundError("Could not locate whitepaper/report/plots_and_data")
-
-REPORT_DIR = _find_report_dir()
-DATA_ROOT = REPORT_DIR / "plots_and_data"
-
-def _trial_cache_key(
-    ticker: str,
-    start: str,
-    end: str,
-    latency: float,
-    replenishment: float,
-    parent_qty: int,
-    depth_lmt: str,
-    OBI_THRESHOLD: float,
-    horizon: float,
-    min_ns: float,
-    min_shares: int,
-    max_size: int,
-    wait_ns: float,
-    n_chunks: int,
-    max_overlap_ns: float,
-    method: str,
-    n_trials: int,
-    seed: int,
-) -> str:
-    payload = {
-        "ticker": ticker,
-        "start": start,
-        "end": end,
-        "latency": latency,
-        "replenishment": replenishment,
-        "parent_qty": parent_qty,
-        "depth_lmt": depth_lmt,
-        "OBI_THRESHOLD": OBI_THRESHOLD,
-        "horizon": horizon,
-        "min_ns": min_ns,
-        "min_shares": min_shares,
-        "max_size": max_size,
-        "wait_ns": wait_ns,
-        "n_chunks": n_chunks,
-        "max_overlap_ns": max_overlap_ns,
-        "method": method,
-        "n_trials": n_trials,
-        "seed": seed,
-    }
-    serialized = json.dumps(payload, sort_keys=True, default=str)
-    return hashlib.md5(serialized.encode("utf-8")).hexdigest()
+sys.path.insert(0, str(Path("../code")))
+from trials import _trial_cache_key
 
 def load_pair(hybrid_parquet: Path, pre = None):
     """Given a hybrid parquet path, load it and its matching constant parquet."""
-    params_path = hybrid_parquet.with_suffix(".json")
+    if pre:
+      params_path = CACHE_DIR / f"{pre}/{hybrid_parquet.stem}.json"
+    else:
+      params_path = CACHE_DIR / f"{hybrid_parquet.stem}.json"
     with open(params_path) as f:
         params = json.load(f)
 
     const_key = _trial_cache_key(**{**params, "method": "constant"})
-    const_path = hybrid_parquet.parent / f"{const_key}.parquet"
+    if pre:
+      const_path = CACHE_DIR / f"{pre}/{const_key}.parquet"
+    else:
+      const_path = CACHE_DIR / f"{const_key}.parquet"
 
     hybrid_df = pl.read_parquet(hybrid_parquet)
     const_df = pl.read_parquet(const_path)
     return hybrid_df, const_df, params
-
-def report_table(df: pl.DataFrame) -> pd.DataFrame:
-    """Return a pandas table so Quarto renders captions/crossrefs reliably."""
-    return pd.DataFrame(df.to_dicts())
 ```
 
 ```{python}
@@ -168,14 +139,14 @@ def report_table(df: pl.DataFrame) -> pd.DataFrame:
 
 
 # --- pick a parquet to inspect ---
-CACHE_DIR = DATA_ROOT / "section_3/latency_data/mid"
+CACHE_DIR = Path("plots_and_data/section_3/latency_data/mid/")
 path = CACHE_DIR / "1a9db328aaf8382791779f4075474cee.parquet"
 
 hybrid_df, const_df, params = load_pair(path)
 cols = ['parent_filled', 'parent_arrival_cost', 'mean_child_arrival_cost', 'median_child_arrival_cost', 'lifetime_s']
 result = const_df.with_columns((pl.col("lifetime_ns") / 1e9).alias("lifetime_s")).select(cols).describe().rename({'parent_arrival_cost': 'parent_cost', "mean_child_arrival_cost": "mean_child_cost", "median_child_cost": "median_child_cost", 'parent_filled': 'total_filled'})
 
-report_table(result.filter(pl.col("statistic").is_in(['mean', 'min', '25%', '50%', '75%', 'max'])))
+result.filter(pl.col("statistic").is_in(['mean', 'min', '25%', '50%', '75%', 'max']))
 ```
 
 
@@ -188,72 +159,95 @@ The first pass attempt to improve on the benchmark is simply running the same st
 #|label: tbl-naive-ioc
 
 # --- pick a parquet to inspect ---
-CACHE_DIR = DATA_ROOT / "section_2/failed_runs"
+CACHE_DIR = Path("plots_and_data/section_2/failed_runs/")
 path = CACHE_DIR / "3890ab215531e0d7c7cf3bc62ae6bf40.parquet"
 
 hybrid_df, const_df, params = load_pair(path)
 cols = ['parent_filled', 'parent_arrival_cost', 'mean_child_arrival_cost', 'median_child_arrival_cost', 'lifetime_s']
 result = const_df.with_columns((pl.col("lifetime_ns") / 1e9).alias("lifetime_s")).select(cols).describe().rename({'parent_arrival_cost': 'parent_cost', "mean_child_arrival_cost": "mean_child_cost", "median_child_cost": "median_child_cost", 'parent_filled': 'total_filled'})
 
-report_table(result.filter(pl.col("statistic").is_in(['mean', 'min', '25%', '50%', '75%', 'max'])))
+result.filter(pl.col("statistic").is_in(['mean', 'min', '25%', '50%', '75%', 'max']))
 ```
 
 ## Failure: OBI Aggressive Only
-Beyond simply tweaking the benchmark our first true pass at an improvement used OBI to time our fills using the parameter `OBI_THRESHOLD = 0.85`. For a buy order, if the OBI was above the threshold that indicated an impending upward price move, so the logic was to fill a buy order immediately of size $`MAX_SIZE` * |OBI|$, wehre `MAX_SIZE = 350`. This would dynamically size orders based on confidence about subsequent price moves, and attempt to only fill at advantageous times. Below is a plot of this strategy in action.
+Beyond simply tweaking the benchmark our first true pass at an improvement used OBI to time our fills using the parameter `OBI_THRESHOLD = 0.85`. First, set the maximum size of a child fill at $q_{max}$. For a buy order, if the OBI was above the threshold that indicated an expected upward price move, the logic is to fill a child order immediately of size $q_{max} * |OBI|$, where $q_{max} = 350$. This would dynamically size orders based on the size of the subsequent price moves, and attempt to only fill at advantageous times. @fig-obi shows this strategy in action. 
 
 ![OBI Aggressive Only Fills](plots_and_data/section_2/failed_runs/obi_aggressive.png){#fig-obi fig-align="center" width=70%}
 
-This strategy had a few issues. Firstly, calibrating the parameters above was difficult, and for some time windows, the OBI simply never hit the threshold it never filled. More crucially though, this method led us to the final improvement and a successful strategy. This strategy originated from an *alpha-generation perspective*. Using OBI to *time* orders is what a strategy would to in order to *enter positions* and take advantage of future returns. It took some time and effort to escape this way of thinking and reach an *execution* based perspective, where a strategy's goal is to *minimize cost* by setting up a sequence of *fills* (not changing positions) over a set time horizon. Allowing the price to drift toward and away from the ideal fill and taking advantage of favorable conditions, not predicting returns to be captured.
+This strategy had a few issues. Firstly, for some time horizons, OBI infrequently or simply never hits the threshold it and so the parent order only gets a partial fill. More fundamentally, this logic only seeks to avoid adverse fill conditions, and does nothing explicit to take advantage of favorable ones. 
+
+The aggressive-only OBI logic originated from a way of thinking rooted in alpha generation and the predict returns to be exploited by taking an aggressive position. But returns are exactly *not* what an execution strategy is focused on: simply put, to take advantage of alpha a strategy must enter and exit a position, but an execution strategy is *given* a predetermined order to place and its task is to minimize the cost filling the order's quantity over a set time horizon. Solving the second issue via this change of perspective lead directly to our improvement via a hybrid strategy.
+
+## Final Strategy: Hybrid OBI Calibrated Aggression
+<!-- Michael CN -->
+After escaping the alpha generation line of thinking, we were able to develop a much more effective fill strategy. It is a hybrid of the naive and OBI strategies that uses OBI to calibrate the aggressiveness or urgency of fills. For a parenty order of quantity $q$ logic is as follows:
+
+1. Split the parent order into $n$ child orders of size $q/n$. 
+2. Set positive and negative OBI thresholds for expected price moves that are calibrated using the markout plots above.
+3. For a buy order, depending on the value of OBI, do the following (oppsite for a sell):
+  - If OBI > `OBI_THRESHOLD`, expect an adverse price move. Fill one child order immediately. Cross the spread with an IOC limit order wiht limit price set to the 10th level of the book at the time the parent order was split.
+  - If OBI < -1 * `OBI_THRESHOLD`, expect a favorable price move. Place resting limit orders at each of the top ten bids, each for the quantity of one child order. Set expiry at the end of the parent order's allowed horizon.
+  - If OBI is between the above thresholds, fill child orders with IOC limit orders at a slow constant rate with the same limit price.
+
+By calibrating the aggression of child orders and allowing the price to drift, this strategy fills the vast majority of shares during favorable price conditions, and avoids unfavorable ones by filling immediately and then not at all until the price moves favorably again. This is illustrated in @fig-hybrid, which shows the true and simulated bid and ask overtime with favorable and adverse price drifts highlighted using the value of OBI. The verticle gray markers are the timestamps of each child fill. Note that limit orders placed when OBI is low may fill when OBI is high, resulting in lots of fills during times marked "unfavorable". This is positive and expected behavior.
+
+![Hybrid Fill Strategy](plots_and_data/section_3/successful_run/hybrid.png){#fig-hybrid fig-align="center" width=70%}
 
 
 # Empirical Findings
 <!-- Michael B -->
- 
-## Successful Strategy: Hybrid OBI Calibrated Aggression
-<!-- Michael CN -->
-![Hybrid Plot](plots_and_data/section_3/successful_run/hybrid.png){#fig-hybrid fig-align="center" width=70%}
-{{< pagebreak >}}
+@tbl-success shows some descriptive statistics of the results of the hybrid fill strategy, by asset. The parent costs are measured in bps per share. These results are derived from running the strategy across assets for 5000 timestamps, latency of `100us`, replenishment rate of $15$, a time horizon of $5$ minutes, and splitting a 10,000 share parent order into $n=50$ child orders each with quantity $q=200$ with OBI thresholds of $\pm 0.10$. 
 
+The average parent order's total cost, defined in @sec-definitions, is highly dependent on the liquidity of each stock, with `DRH` and `CSCO` fills being respectively 141x and 9x times more costly than `AMZN` on average. This is likely the result of illiquidity causing child orders to have higher mechanical price impact, and methods to improve this are considered in @sec-future. The order lifetimes are relatively consistent at approximately thirty seconds for the liquid stocks, and above a minute for illiquid. All hybrid fills were completed withing the 5 minute horizon. @fig-hist shows histograms of the total parent cost per asset. Here it is visually obvious that the naive method has a heavy right tail, while the hybrid strategy has a mean shift downward and heavy left tail.
+
+::: {#fig-hist layout-ncol=3}
+
+![AMZN](plots_and_data/section_3/successful_run/plots/parent_cost_mid.AMZN.png){#fig-hybrid fig-align="center" width=100%}
+
+![CSCO](plots_and_data/section_3/successful_run/plots/parent_cost_mid.CSCO.png){#fig-hybrid fig-align="center" width=100%}
+
+![DRH](plots_and_data/section_3/successful_run/plots/parent_cost_mid.DRH.png){#fig-hybrid fig-align="center" width=100%}
+
+Total Parent Cost Comparison
+:::
 ```{python}
 #| echo: false
-#| tbl-cap: "OBI Calibrated Aggression"
-#| layout: [[35, -30, 35], [100]]
+#| tbl-cap: "Hybrid Fill Statistics"
+#| layout: [[47.5, -5, 47.5], [100]]
 #| label: tbl-success
 #| tbl-subcap: 
 #|    - "AMZN"
 #|    - "CSCO"
 #|    - "DRH"
-#| column: page
-#| tbl-align: center
 
 #=============
-# AMZN
+#    AMZN
 #=============
 from IPython.display import Markdown, display
-
+# layout: [[35, -30, 35], [100]]
 
 # --- pick a parquet to inspect ---
-CACHE_DIR = DATA_ROOT / "section_3/successful_run/cost_data"
+CACHE_DIR = Path("plots_and_data/section_3/successful_run/cost_data")
 path = CACHE_DIR / "204b0a2f144401b56ae861cbac7ec2a6.parquet"
 
 hybrid_df, const_df, params = load_pair(path)
-cols = ['parent_arrival_cost', 'mean_child_arrival_cost', 'lifetime_s']
+cols = ['parent_arrival_cost', 'lifetime_s']
 result = (
   hybrid_df
   .with_columns((pl.col("lifetime_ns") / 1e9).abs().alias("lifetime_s"))
   .select(cols)
   .describe()
-  .rename({'parent_arrival_cost': 'parent_cost', "mean_child_arrival_cost": "mean_child_cost", "median_child_cost": "median_child_cost"})
+  .rename({'parent_arrival_cost': 'parent_cost'})
 )
 
-display(report_table(result.filter(pl.col("statistic").is_in(['mean', 'min', '25%', '50%', '75%', 'max']))))
+display(result.filter(pl.col("statistic").is_in(['mean', 'std', '50%'])))
 
 #=============
-# CSCO
+#    CSCO
 #=============
 
 # --- pick a parquet to inspect ---
-CACHE_DIR = DATA_ROOT / "section_3/successful_run/cost_data"
+CACHE_DIR = Path("plots_and_data/section_3/successful_run/cost_data")
 path = CACHE_DIR / "1a9db328aaf8382791779f4075474cee.parquet"
 
 hybrid_df, const_df, params = load_pair(path)
@@ -262,17 +256,17 @@ result = (
   .with_columns((pl.col("lifetime_ns") / 1e9).abs().alias("lifetime_s"))
   .select(cols)
   .describe()
-  .rename({'parent_arrival_cost': 'parent_cost', "mean_child_arrival_cost": "mean_child_cost", "median_child_cost": "median_child_cost"})
+  .rename({'parent_arrival_cost': 'parent_cost'})
 )
 
-display(report_table(result.filter(pl.col("statistic").is_in(['mean', 'min', '25%', '50%', '75%', 'max']))))
+display(result.filter(pl.col("statistic").is_in(['mean', 'std', '50%'])))
 
 #=============
-# DRH
+#    DRH
 #=============
 
 # --- pick a parquet to inspect ---
-CACHE_DIR = DATA_ROOT / "section_3/successful_run/cost_data"
+CACHE_DIR = Path("plots_and_data/section_3/successful_run/cost_data")
 path = CACHE_DIR / "9a484a1ba943b069d31bbc4aeb70b1a7.parquet"
 
 hybrid_df, const_df, params = load_pair(path)
@@ -281,22 +275,22 @@ result = (
   .with_columns((pl.col("lifetime_ns") / 1e9).abs().alias("lifetime_s"))
   .select(cols)
   .describe()
-  .rename({'parent_arrival_cost': 'parent_cost', "mean_child_arrival_cost": "mean_child_cost", "median_child_cost": "median_child_cost"})
+  .rename({'parent_arrival_cost': 'parent_cost'})
 )
 
-display(report_table(result.filter(pl.col("statistic").is_in(['mean', 'min', '25%', '50%', '75%', 'max']))))
+display(result.filter(pl.col("statistic").is_in(['mean', 'std', '50%'])))
 ```
 
 ## Test Stats / Significance
-
+@tbl-tstat shows the average cost in bps per share, per ticker, using the hybrid and naive fill strategies, as well as the results of a two-sample T-test on per asset samples. The hybrid strategy shows a pronounced downward shift in cost accross assets, with improvements of 89% for `AMZN`, 73% for `CSCO`, and 55% for `DRH`. Each of these results is also highly significant.
 ```{python}
-#|echo: false
-#|tbl-cap: "T-Test Significance"
-#|label: tbl-tstat
+#| echo: false
+#| tbl-cap: "T-Test on Arrival Cost per Asset"
+#| label: tbl-tstat
 
 from scipy import stats
 # --- pick a parquet to inspect ---
-CACHE_DIR = DATA_ROOT / "section_3/successful_run/cost_data"
+CACHE_DIR = Path("plots_and_data/section_3/successful_run/cost_data")
 hybrid_paths = [
   "204b0a2f144401b56ae861cbac7ec2a6.parquet", # AMZN
   "1a9db328aaf8382791779f4075474cee.parquet", # CSCO
@@ -323,20 +317,23 @@ for p, ticker in zip(hybrid_paths, tickers):
   })
 
 df = pl.DataFrame(data)
-report_table(df)
+df
 
 ```
 
-## Effects of Latency
-Table from ilestone showing the effect of latency on hybrid filler
+## Effects of Latency and Replenishment
+In @tbl-latency and @tbl-replenishment we demonstrate the hybrid strategy's robustness to latency and replenishment. Here, latency is implemented as the delay between the time each child order is sent vs when it enters the book, and is displayed in microseconds. The bps per-share cost differences between levels of latency are remarkably low across assets and strategies. This is obvious for the naive strategy as it is zero-intelligence. The hybrid strategy does have some reliance on latency when filling with an IOC order immediately before adverse moves, however the majority of fills are from resting limit orders filling over multiple seconds and so it remains robust to changes in latency.
+
+The effects of replenishment are also small but are more clear than latency. Across strategy and asset, a higher rate of replenishment leads to a slightly lower average cost and vice versa. This is simply calibration of the books liquidity, and demonstrates a sanity check on the fill results and the hybrid strategy's robustness to the value of hyperparameters.
 
 ```{python}
-#|echo: false
-#|tbl-cap: "Effects of Latency"
-#|label: tbl-latency
+#| echo: false
+#| tbl-cap: "Effects of Latency"
+#| label: tbl-latency
 
+from scipy import stats
 # --- pick a parquet to inspect ---
-CACHE_DIR = DATA_ROOT / "section_3/latency_data"
+CACHE_DIR = Path("plots_and_data/section_3/latency_data/")
 hybrid_paths = [
   ("low/974b77b083e087c8108ea24d5563cd48.parquet", "CSCO", "low"),
   ("low/d41ed8fb8e47884319c37084fd0ec75b.parquet", "AMZN", "low"),
@@ -357,24 +354,24 @@ for p, ticker, level in hybrid_paths:
   c_mean = const_df.select("parent_arrival_cost").mean().item() 
   data.append({
     "symbol": ticker,
-    "hybrid mean": round(h_mean, 2),
-    "naive mean": round(c_mean, 2),
-    "latency (ns)": params['latency'],
-    "latency_level": level
+    "latency_level": level,
+    "hybrid mean cost": round(h_mean, 2),
+    "naive mean cost": round(c_mean, 2),
+    "latency (us)": params['latency'] / 1000,
   })
 
 df = pl.DataFrame(data)
-report_table(df)
+df
 ```
 
-## Effects of Replenishment
 ```{python}
-#|echo: false
-#|tbl-cap: "Effects of Replenishment"
-#|label: tbl-replenishment
+#| echo: false
+#| tbl-cap: "Effects of Replenishment"
+#| label: tbl-replenishment
 
+from scipy import stats
 # --- pick a parquet to inspect ---
-CACHE_DIR = DATA_ROOT / "section_3/replenishment_data"
+CACHE_DIR = Path("plots_and_data/section_3/replenishment_data/")
 hybrid_paths = [
   ("low/066d1d787a1148b4a53c40a6c8a750ba.parquet", "CSCO", "low"),
   ("low/13675423747362b1fad48b2114aaa90e.parquet", "AMZN", "low"),
@@ -395,39 +392,44 @@ for p, ticker, level in hybrid_paths:
   c_mean = const_df.select("parent_arrival_cost").mean().item() 
   data.append({
     "symbol": ticker,
-    "hybrid mean": round(h_mean, 2),
-    "naive mean": round(c_mean, 2),
+    "replenishment_level": level,
+    "hybrid mean cost": round(h_mean, 2),
+    "naive mean cost": round(c_mean, 2),
     "replenishment": params['replenishment'],
-    "replenishment_level": level
   })
 
 df = pl.DataFrame(data)
-report_table(df)
+df
 ```
 
 ## Intraday Seasonality
-::: {#fig-time-of-day layout-nrow=3}
+@fig-time shows the intraday seasonality of median arrival cost in bps per-share, across ticker sand strategies. As expected both strategies, though especially the hybrid, benefit from the high volume on the open, and approach a mean throughout the day. Interestingly, the naive strategy does worst during the open for DRH. This could be a result of high opening spreads for the illiquid asset, which then stabilize to one or two ticks overtime.
 
-![AMZN](plots_and_data/section_3/successful_run/plots/time_mid.AMZN.png){#fig-time-amzn fig-align="center" width=70%}
+::: {#fig-time layout="[[1,1], [1]]"}
 
-![CSCO](plots_and_data/section_3/successful_run/plots/time_mid.CSCO.png){#fig-time-csco fig-align="center" width=70%}
+![AMZN](plots_and_data/section_3/successful_run/plots/time_mid.AMZN.png){#fig-time-amzn fig-align="center"}
 
-![DRH](plots_and_data/section_3/successful_run/plots/time_mid.DRH.png){#fig-time-drh fig-align="center" width=70%}
+![CSCO](plots_and_data/section_3/successful_run/plots/time_mid.CSCO.png){#fig-time-csco fig-align="center"}
+
+![DRH](plots_and_data/section_3/successful_run/plots/time_mid.DRH.png){#fig-time-drh fig-align="center" width=52%}
 
 Intraday Seasonality of Arrival Cost
 :::
 
-# Future Work
+# Future Work {#sec-future}
 <!-- Debby -->
+A few improvements stand out with their potential to improve upon the hybrid fill strategy. They are laid out below.
 
-## Smoothed OBI
-Tried it, got some weird results (no hyperparam tuning, possibly a quirk of replenishment.)
+## EMA of Book Imbalance
+To prevent temporary peaks in book imbalance from changin the strategy's aggression, the strategy ould use a moving average of book imbalance. This would smooth the peaky nature of OBI. HOwever, this introduces yet more hyperparameters and is linked with the time to expiry of resting limit orders.
 
-## A Catch-up/Fall-Behind Mechanism
-Currently waiting in-band.
+## Catch-Up Mechanism
+Currently, the strategy is placing naive IOC orders when OBI is not strongly indicating the direction of price drift, which can cause unnecessary price impact. This could be improved by implementing a mechanism to measure how ahead or behind the strategy is in its filled quantity and dynamically tweak the OBI thresholds or size of fills.
 
-## Fixed horizon vs T(v)
+## Horizon as a Function of Volume
+Currently the hybrid strategy uses a set hyperparameter for the parent order's horizon to fill. This could be dynamically chosen as a function of the share or dollar volume in the past few minutes, indicating how much impact the fills are likely to have. With more volume being traded, the time horizon can be shorter and vice-versa.
 
+{{< pagebreak >}}
 
 
 # Definitions and Appendix {#sec-definitions}
@@ -441,7 +443,7 @@ OBI = \frac{\Sigma_{i=0}^5 Q_{i}^{bid} - \Sigma_{i=0}^5 Q_{i}^{ask}}{\Sigma_{i=0
 \end{split}
 $$ {#eq-obi}
 
-- Price Impact : When referring to price impact we inlcude only the mechanical impact of taking liquidity from the limit order book. Below is a visualization of the mechanical impact for reference. Our order book simulation is discussed in @sec-sim, and includes further information on impact as well as replenishment adn latency.
+- Price Impact : When referring to price impact we inlcude only the mechanical impact of taking liquidity from the limit order book. Below is a visualization of the mechanical impact for reference. Our order book simulation is discussed in @sec-sim, and includes further information on impact as well as replenishment and latency.
 ![Mechanical Impact](plots_and_data/appendix/impact.png){#fig-impact fig-align="center" width=70%}
 - Arrival Cost: When referring to arrival cost of a parent or child order, we are referring to the volume-weighted average price of a fill minus the mid price at the time of execution, divided by mid price and converted to bps. For a parent order, the VWAP sums over child order's individual vwaps in the same way, and the mid price is set to the price at the time the parent order sent to the execution engine. For child orders, the mean and median arrival costs are calculated across child orders for a given parent. Below, $q_i$ and $p_i$ are the individual fill's quantities and prices respectively.
 $$
@@ -450,3 +452,12 @@ p_{vwap} &= \frac{\Sigma_{i=0}^nq_i\,p_i}{\Sigma_{i=0}^nq_i}\\
 \text{ArrivalCost (bps)} &= \frac{p_{vwap} - p_{mid}}{p_{mid}} * 10^4
 \end{split}
 $$ {#eq-vwap}
+
+# References
+
+- Bouchaud, J. P., Farmer, J. D., & Lillo, F. (2009). How markets slowly digest changes in supply and demand. *Handbook of Financial Markets*.
+- Cont, R., Kukanov, A., & Stoikov, S. (2014). The price impact of order book events. *Journal of Financial Econometrics*.
+- Said, E. (2022). Market Impact: Empirical Evidence, Theory and Practice. *arXiv preprint*.
+- Sato, Y., & Kanazawa, K. (2024). Online Learning of Order Flow and Market Impact with Bayesian Change-Point Detection Methods. *arXiv preprint*.
+- Obizhaeva, A. A., & Wang, J. (2013). Optimal trading strategy and supply/demand dynamics. *Journal of Financial Markets*, 16(1), 1–32.
+- Gârleanu, N., & Pedersen, L. H. (2013). Dynamic trading with predictable returns and transaction costs. *Journal of Finance*, 68(6), 2309–2340.

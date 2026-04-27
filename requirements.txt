@@ -4,6 +4,6 @@ databento
 matplotlib
 statsmodels
 scikit-learn
-scipy
 polars
+scipy
 pyyaml

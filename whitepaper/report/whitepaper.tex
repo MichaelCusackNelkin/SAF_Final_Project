@@ -64,9 +64,48 @@
 \fi
 \makeatother
 
+\usepackage{color}
+\usepackage{fancyvrb}
+\newcommand{\VerbBar}{|}
+\newcommand{\VERB}{\Verb[commandchars=\\\{\}]}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+% Add ',fontsize=\small' for more characters per line
+\usepackage{framed}
+\definecolor{shadecolor}{RGB}{241,243,245}
+\newenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
+\newcommand{\AlertTok}[1]{\textcolor[rgb]{0.68,0.00,0.00}{#1}}
+\newcommand{\AnnotationTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{#1}}
+\newcommand{\AttributeTok}[1]{\textcolor[rgb]{0.40,0.45,0.13}{#1}}
+\newcommand{\BaseNTok}[1]{\textcolor[rgb]{0.68,0.00,0.00}{#1}}
+\newcommand{\BuiltInTok}[1]{\textcolor[rgb]{0.00,0.23,0.31}{#1}}
+\newcommand{\CharTok}[1]{\textcolor[rgb]{0.13,0.47,0.30}{#1}}
+\newcommand{\CommentTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{#1}}
+\newcommand{\CommentVarTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{\textit{#1}}}
+\newcommand{\ConstantTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{#1}}
+\newcommand{\ControlFlowTok}[1]{\textcolor[rgb]{0.00,0.23,0.31}{\textbf{#1}}}
+\newcommand{\DataTypeTok}[1]{\textcolor[rgb]{0.68,0.00,0.00}{#1}}
+\newcommand{\DecValTok}[1]{\textcolor[rgb]{0.68,0.00,0.00}{#1}}
+\newcommand{\DocumentationTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{\textit{#1}}}
+\newcommand{\ErrorTok}[1]{\textcolor[rgb]{0.68,0.00,0.00}{#1}}
+\newcommand{\ExtensionTok}[1]{\textcolor[rgb]{0.00,0.23,0.31}{#1}}
+\newcommand{\FloatTok}[1]{\textcolor[rgb]{0.68,0.00,0.00}{#1}}
+\newcommand{\FunctionTok}[1]{\textcolor[rgb]{0.28,0.35,0.67}{#1}}
+\newcommand{\ImportTok}[1]{\textcolor[rgb]{0.00,0.46,0.62}{#1}}
+\newcommand{\InformationTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{#1}}
+\newcommand{\KeywordTok}[1]{\textcolor[rgb]{0.00,0.23,0.31}{\textbf{#1}}}
+\newcommand{\NormalTok}[1]{\textcolor[rgb]{0.00,0.23,0.31}{#1}}
+\newcommand{\OperatorTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{#1}}
+\newcommand{\OtherTok}[1]{\textcolor[rgb]{0.00,0.23,0.31}{#1}}
+\newcommand{\PreprocessorTok}[1]{\textcolor[rgb]{0.68,0.00,0.00}{#1}}
+\newcommand{\RegionMarkerTok}[1]{\textcolor[rgb]{0.00,0.23,0.31}{#1}}
+\newcommand{\SpecialCharTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{#1}}
+\newcommand{\SpecialStringTok}[1]{\textcolor[rgb]{0.13,0.47,0.30}{#1}}
+\newcommand{\StringTok}[1]{\textcolor[rgb]{0.13,0.47,0.30}{#1}}
+\newcommand{\VariableTok}[1]{\textcolor[rgb]{0.07,0.07,0.07}{#1}}
+\newcommand{\VerbatimStringTok}[1]{\textcolor[rgb]{0.13,0.47,0.30}{#1}}
+\newcommand{\WarningTok}[1]{\textcolor[rgb]{0.37,0.37,0.37}{\textit{#1}}}
 
 \usepackage{longtable,booktabs,array}
-\newcounter{none} % for unnumbered tables
 \usepackage{calc} % for calculating minipage widths
 % Correct order of tables after \paragraph or \subparagraph
 \usepackage{etoolbox}
@@ -164,10 +203,6 @@
 \@ifpackageloaded{caption}{}{\usepackage{caption}}
 \@ifpackageloaded{subcaption}{}{\usepackage{subcaption}}
 \makeatother
-\makeatletter
-\@ifpackageloaded{sidenotes}{}{\usepackage{sidenotes}}
-\@ifpackageloaded{marginnote}{}{\usepackage{marginnote}}
-\makeatother
 \usepackage{bookmark}
 \IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
 \urlstyle{same}
@@ -207,7 +242,7 @@ Order Splitting Strategies}
 \\%
 %
 \texttt{vp2580@columbia.edu}}
-\date{2026-04-26}
+\date{2026-04-27}
 \begin{document}
 \maketitle
 \begin{abstract}
@@ -235,13 +270,13 @@ unfavorable ones.
 Splitting}\label{underperformance-of-naive-splitting}
 
 Unfortunately, naively splitting a parent order into \(n\) chunks and
-filling them as market orders \(\tau\) time units apart has high impact
-and exposes the parent order to significant price drifts. The below
-example of splitting a 5000-share order into twenty-five 200-share buy
-fills shows the significant impact of repeatedly lifting the ask
+filling them as market orders \(\delta t\) time units apart has high
+impact and exposes the parent order to significant price drifts. The
+below example of splitting a 5000-share order into twenty-five 200-share
+buy fills shows the significant impact of repeatedly lifting the ask
 overtime. The underperformance of this strategy nessesitates a more
 intelligent way to split and fill large orders. \begin{center}
-\includegraphics[width=0.7\linewidth,height=\textheight,keepaspectratio,alt={Naive Order Splitting}]{plots_and_data/section_1/naive_new.png}
+\includegraphics[width=0.7\linewidth,height=\textheight,keepaspectratio]{plots_and_data/section_1/naive_new.png}
 \end{center}
 
 \subsection{Book Imbalance as a Primary
@@ -312,6 +347,57 @@ tasks, like the below.
 
 \subsection{Simulator}\label{sec-sim}
 
+To allow us to simulate fills using \texttt{MBP1-10} data we built an
+\texttt{ExecutionSimulator} class which can:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  Simulate the execution of market orders, resting limit orders, and
+  immediate-or-cancel (IOC) limit orders at a given nanosecond timestamp
+  and latency.
+\item
+  Maintain an orderbook state over time, using L2 data from the
+  \texttt{DatabentoGenericAdapter}, consistent with mutations of the
+  book caused by simulated fills and the replenishment of the swept
+  levels via a Poisson process with book-update time sampling.
+\item
+  Simulate and track execution statistics (arrival cost, fill times,
+  quantities, etc.) for an arbitrary execution strategy using the above
+  order types.
+\end{enumerate}
+
+Our implementation of the \texttt{ExecutionSimulator} class initiates
+the L2 book with a \texttt{polars} dataframe in Databento's
+\texttt{MBP-10} schema. The simulator maintains the book using
+internally consistent \texttt{numpy} arrays, which it updates as the
+book mutates via simulated fills. At the end of a simulation it returns
+a new \texttt{polars} dataframe representing the mutated book over time
+(sampled at book-update events). After each simulated order is filled
+(mainly child orders) the simulator returns a dictionary of the form
+below. Note from Section~\ref{sec-definitions} that
+\texttt{arrival\_cost} is calculated as the \texttt{vwap} minus the mid
+price at execution.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{\{}\StringTok{\textquotesingle{}vwap\textquotesingle{}}\NormalTok{: }\FloatTok{211.9365352112676}\NormalTok{,}
+ \StringTok{\textquotesingle{}fills\textquotesingle{}}\NormalTok{: [(}\FloatTok{211.93}\NormalTok{, }\DecValTok{246}\NormalTok{), (}\FloatTok{211.94}\NormalTok{, }\DecValTok{464}\NormalTok{)],}
+ \StringTok{\textquotesingle{}total\_filled\textquotesingle{}}\NormalTok{: }\DecValTok{710}\NormalTok{,}
+ \StringTok{\textquotesingle{}levels\_swept\textquotesingle{}}\NormalTok{: }\DecValTok{1}\NormalTok{,}
+ \StringTok{\textquotesingle{}executed\_at\_ns\textquotesingle{}}\NormalTok{: }\DecValTok{1774538471626080001}\NormalTok{,}
+ \StringTok{\textquotesingle{}executed\_at\_idx\textquotesingle{}}\NormalTok{: }\DecValTok{4078073}\NormalTok{,}
+ \StringTok{\textquotesingle{}arrival\_cost\textquotesingle{}}\NormalTok{: }\FloatTok{0.02153521126757596}\NormalTok{\}}
+\end{Highlighting}
+\end{Shaded}
+
+At each update of the book (sampled from the true data) the book also
+replenishes any levels swept by simulated fills. To accomplish this it
+uses a Poisson process to determine the rate of replenishment. When a
+replenishment occurs at a given level, that level is refilled with a 100
+share order for the price the level was previously swept at.
+
 \subsection{Strategy Evaluation}\label{strategy-evaluation}
 
 To evaluate each of the following strategies, we utilize a parallel
@@ -360,31 +446,28 @@ using regular market orders. Below in Table~\ref{tbl-naive} are some
 performance metrics for this naive method to serve as a benchmark we are
 competing against.
 
-{
-
-\begin{longtable}[]{@{}lllllll@{}}
+\begin{longtable}[]{@{}llllll@{}}
 
 \caption{\label{tbl-naive}Naive Results}
 
 \tabularnewline
 
 \toprule\noalign{}
-& statistic & total\_filled & parent\_cost & mean\_child\_cost &
+statistic & total\_filled & parent\_cost & mean\_child\_cost &
 median\_child\_arrival\_cost & lifetime\_s \\
+str & f64 & f64 & f64 & f64 & f64 \\
 \midrule\noalign{}
 \endhead
 \bottomrule\noalign{}
 \endlastfoot
-0 & mean & 10000.0 & 9.862600 & 5.798219 & 4.182775 & 9.582253 \\
-1 & min & 10000.0 & -21.535187 & 1.374581 & 0.580619 & 6.221948 \\
-2 & 25\% & 10000.0 & 6.428417 & 3.883612 & 3.316627 & 9.524487 \\
-3 & 50\% & 10000.0 & 9.053304 & 5.149228 & 3.905040 & 9.687721 \\
-4 & 75\% & 10000.0 & 12.472484 & 7.069212 & 4.637834 & 9.761385 \\
-5 & max & 10000.0 & 61.719240 & 36.425326 & 35.814917 & 9.800094 \\
+"mean" & 10000.0 & 9.8626 & 5.798219 & 4.182775 & 9.582253 \\
+"min" & 10000.0 & -21.535187 & 1.374581 & 0.580619 & 6.221948 \\
+"25\%" & 10000.0 & 6.428417 & 3.883612 & 3.316627 & 9.524487 \\
+"50\%" & 10000.0 & 9.053304 & 5.149228 & 3.90504 & 9.687721 \\
+"75\%" & 10000.0 & 12.472484 & 7.069212 & 4.637834 & 9.761385 \\
+"max" & 10000.0 & 61.71924 & 36.425326 & 35.814917 & 9.800094 \\
 
 \end{longtable}
-
-}
 
 \subsection{Failure: Naive with IOC}\label{failure-naive-with-ioc}
 
@@ -397,44 +480,41 @@ order at the initial time of execution. This resulted in better fills,
 however it almost never completed hte full parent order given it's
 simple cap on the allowed execution price.
 
-{
-
-\begin{longtable}[]{@{}lllllll@{}}
+\begin{longtable}[]{@{}llllll@{}}
 
 \caption{\label{tbl-naive-ioc}Naive IOC Results}
 
 \tabularnewline
 
 \toprule\noalign{}
-& statistic & total\_filled & parent\_cost & mean\_child\_cost &
+statistic & total\_filled & parent\_cost & mean\_child\_cost &
 median\_child\_arrival\_cost & lifetime\_s \\
+str & f64 & f64 & f64 & f64 & f64 \\
 \midrule\noalign{}
 \endhead
 \bottomrule\noalign{}
 \endlastfoot
-0 & mean & 7818.5352 & 5.287740 & 3.374856 & 3.293796 & 8.880517 \\
-1 & min & 200.0000 & -21.525161 & 1.207293 & 0.580619 & 0.000000 \\
-2 & 25\% & 6838.0000 & 4.482656 & 3.052005 & 2.950195 & 8.446878 \\
-3 & 50\% & 7905.0000 & 5.518874 & 3.353437 & 3.200819 & 9.370963 \\
-4 & 75\% & 8967.0000 & 6.410203 & 3.658963 & 3.726398 & 9.709241 \\
-5 & max & 10000.0000 & 29.237672 & 16.116962 & 15.400230 & 9.800094 \\
+"mean" & 7818.5352 & 5.28774 & 3.374856 & 3.293796 & 8.880517 \\
+"min" & 200.0 & -21.525161 & 1.207293 & 0.580619 & 0.0 \\
+"25\%" & 6838.0 & 4.482656 & 3.052005 & 2.950195 & 8.446878 \\
+"50\%" & 7905.0 & 5.518874 & 3.353437 & 3.200819 & 9.370963 \\
+"75\%" & 8967.0 & 6.410203 & 3.658963 & 3.726398 & 9.709241 \\
+"max" & 10000.0 & 29.237672 & 16.116962 & 15.40023 & 9.800094 \\
 
 \end{longtable}
-
-}
 
 \subsection{Failure: OBI Aggressive
 Only}\label{failure-obi-aggressive-only}
 
 Beyond simply tweaking the benchmark our first true pass at an
 improvement used OBI to time our fills using the parameter
-\texttt{OBI\_THRESHOLD\ =\ 0.85}. For a buy order, if the OBI was above
-the threshold that indicated an impending upward price move, so the
-logic was to fill a buy order immediately of size
-\(`MAX_SIZE` * |OBI|\), wehre \texttt{MAX\_SIZE\ =\ 350}. This would
-dynamically size orders based on confidence about subsequent price
-moves, and attempt to only fill at advantageous times. Below is a plot
-of this strategy in action.
+\texttt{OBI\_THRESHOLD\ =\ 0.85}. First, set the maximum size of a child
+fill at \(q_{max}\). For a buy order, if the OBI was above the threshold
+that indicated an expected upward price move, the logic is to fill a
+child order immediately of size \(q_{max} * |OBI|\), where
+\(q_{max} = 350\). This would dynamically size orders based on the size
+of the subsequent price moves, and attempt to only fill at advantageous
+times. Figure~\ref{fig-obi} shows this strategy in action.
 
 \begin{figure}
 
@@ -448,115 +528,217 @@ of this strategy in action.
 
 \end{figure}%
 
-This strategy had a few issues. Firstly, calibrating the parameters
-above was difficult, and for some time windows, the OBI simply never hit
-the threshold it never filled. More crucially though, this method led us
-to the final improvement and a successful strategy. This strategy
-originated from an \emph{alpha-generation perspective}. Using OBI to
-\emph{time} orders is what a strategy would to in order to \emph{enter
-positions} and take advantage of future returns. It took some time and
-effort to escape this way of thinking and reach an \emph{execution}
-based perspective, where a strategy's goal is to \emph{minimize cost} by
-setting up a sequence of \emph{fills} (not changing positions) over a
-set time horizon. Allowing the price to drift toward and away from the
-ideal fill and taking advantage of favorable conditions, not predicting
-returns to be captured.
+This strategy had a few issues. Firstly, for some time horizons, OBI
+infrequently or simply never hits the threshold it and so the parent
+order only gets a partial fill. More fundamentally, this logic only
+seeks to avoid adverse fill conditions, and does nothing explicit to
+take advantage of favorable ones.
+
+The aggressive-only OBI logic originated from a way of thinking rooted
+in alpha generation and the predict returns to be exploited by taking an
+aggressive position. But returns are exactly \emph{not} what an
+execution strategy is focused on: simply put, to take advantage of alpha
+a strategy must enter and exit a position, but an execution strategy is
+\emph{given} a predetermined order to place and its task is to minimize
+the cost filling the order's quantity over a set time horizon. Solving
+the second issue via this change of perspective lead directly to our
+improvement via a hybrid strategy.
+
+\subsection{Final Strategy: Hybrid OBI Calibrated
+Aggression}\label{final-strategy-hybrid-obi-calibrated-aggression}
+
+After escaping the alpha generation line of thinking, we were able to
+develop a much more effective fill strategy. It is a hybrid of the naive
+and OBI strategies that uses OBI to calibrate the aggressiveness or
+urgency of fills. For a parenty order of quantity \(q\) logic is as
+follows:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  Split the parent order into \(n\) child orders of size \(q/n\).
+\item
+  Set positive and negative OBI thresholds for expected price moves that
+  are calibrated using the markout plots above.
+\item
+  For a buy order, depending on the value of OBI, do the following
+  (oppsite for a sell):
+\end{enumerate}
+
+\begin{itemize}
+\tightlist
+\item
+  If OBI \textgreater{} \texttt{OBI\_THRESHOLD}, expect an adverse price
+  move. Fill one child order immediately. Cross the spread with an IOC
+  limit order wiht limit price set to the 10th level of the book at the
+  time the parent order was split.
+\item
+  If OBI \textless{} -1 * \texttt{OBI\_THRESHOLD}, expect a favorable
+  price move. Place resting limit orders at each of the top ten bids,
+  each for the quantity of one child order. Set expiry at the end of the
+  parent order's allowed horizon.
+\item
+  If OBI is between the above thresholds, fill child orders with IOC
+  limit orders at a slow constant rate with the same limit price.
+\end{itemize}
+
+By calibrating the aggression of child orders and allowing the price to
+drift, this strategy fills the vast majority of shares during favorable
+price conditions, and avoids unfavorable ones by filling immediately and
+then not at all until the price moves favorably again. This is
+illustrated in Figure~\ref{fig-hybrid}, which shows the true and
+simulated bid and ask overtime with favorable and adverse price drifts
+highlighted using the value of OBI. The verticle gray markers are the
+timestamps of each child fill. Note that limit orders placed when OBI is
+low may fill when OBI is high, resulting in lots of fills during times
+marked ``unfavorable''. This is positive and expected behavior.
+
+\begin{figure}
+
+\centering{
+
+\includegraphics[width=0.7\linewidth,height=\textheight,keepaspectratio]{plots_and_data/section_3/successful_run/hybrid.png}
+
+}
+
+\caption{\label{fig-hybrid}Hybrid Fill Strategy}
+
+\end{figure}%
 
 \section{Empirical Findings}\label{empirical-findings}
 
-\subsection{Successful Strategy: Hybrid OBI Calibrated
-Aggression}\label{successful-strategy-hybrid-obi-calibrated-aggression}
+Table~\ref{tbl-success} shows some descriptive statistics of the results
+of the hybrid fill strategy, by asset. The parent costs are measured in
+bps per share. These results are derived from running the strategy
+across assets for 5000 timestamps, latency of \texttt{100us},
+replenishment rate of \(15\), a time horizon of \(5\) minutes, and
+splitting a 10,000 share parent order into \(n=50\) child orders each
+with quantity \(q=200\) with OBI thresholds of \(\pm 0.10\).
 
-\begin{center}
-\includegraphics[width=0.7\linewidth,height=\textheight,keepaspectratio]{plots_and_data/section_3/successful_run/hybrid.png}
-\end{center}
-\newpage{}
+The average parent order's total cost, defined in
+Section~\ref{sec-definitions}, is highly dependent on the liquidity of
+each stock, with \texttt{DRH} and \texttt{CSCO} fills being respectively
+141x and 9x times more costly than \texttt{AMZN} on average. This is
+likely the result of illiquidity causing child orders to have higher
+mechanical price impact, and methods to improve this are considered in
+Section~\ref{sec-future}. The order lifetimes are relatively consistent
+at approximately thirty seconds for the liquid stocks, and above a
+minute for illiquid. All hybrid fills were completed withing the 5
+minute horizon. Figure~\ref{fig-hist} shows histograms of the total
+parent cost per asset. Here it is visually obvious that the naive method
+has a heavy right tail, while the hybrid strategy has a mean shift
+downward and heavy left tail.
+
+\begin{figure}
+
+\begin{minipage}{0.33\linewidth}
+
+\centering{
+
+\includegraphics[width=1\linewidth,height=\textheight,keepaspectratio]{plots_and_data/section_3/successful_run/plots/parent_cost_mid.AMZN.png}
+
+}
+
+\subcaption{\label{fig-hybrid}AMZN}
+
+\end{minipage}%
+%
+\begin{minipage}{0.33\linewidth}
+
+\centering{
+
+\includegraphics[width=1\linewidth,height=\textheight,keepaspectratio]{plots_and_data/section_3/successful_run/plots/parent_cost_mid.CSCO.png}
+
+}
+
+\subcaption{\label{fig-hybrid}CSCO}
+
+\end{minipage}%
+%
+\begin{minipage}{0.33\linewidth}
+
+\centering{
+
+\includegraphics[width=1\linewidth,height=\textheight,keepaspectratio]{plots_and_data/section_3/successful_run/plots/parent_cost_mid.DRH.png}
+
+}
+
+\subcaption{\label{fig-hybrid}DRH}
+
+\end{minipage}%
+
+\caption{\label{fig-hist}Total Parent Cost Comparison}
+
+\end{figure}%
 
 \begin{table}
 
-\caption{\label{tbl-success}OBI Calibrated Aggression}
+\caption{\label{tbl-success}Hybrid Fill Statistics}
 
-\begin{minipage}[t]{0.35\linewidth}
-
-\begin{figure*}[H]
+\begin{minipage}{0.47\linewidth}
 
 \subcaption{\label{tbl-success-1}AMZN}
 
 \centering{
 
-\begin{tabular}{lllll}
+\begin{tabular}{lll}
 \toprule
- & statistic & parent\_cost & mean\_child\_cost & lifetime\_s\\
+statistic & parent\_cost & lifetime\_s\\
 \midrule
-0 & mean & 0.184687 & -0.508529 & 28.482708\\
-1 & min & -18.378149 & -9.542207 & 0.000000\\
-2 & 25\% & -1.215225 & -1.549884 & 6.433403\\
-3 & 50\% & 0.069449 & -0.757397 & 13.022700\\
-4 & 75\% & 1.365203 & 0.507965 & 27.275029\\
-5 & max & 40.170454 & 2.330946 & 299.604724\\
+str & f64 & f64\\
+"mean" & 0.184687 & 28.482708\\
+"std" & 2.185917 & 45.185725\\
+"50\%" & 0.069449 & 13.0227\\
 \bottomrule
 \end{tabular}
 
 }
 
-\end{figure*}
-
 \end{minipage}%
 %
-\begin{minipage}[t]{0.30\linewidth}
+\begin{minipage}{0.05\linewidth}
 ~\end{minipage}%
 %
-\begin{minipage}[t]{0.35\linewidth}
-
-\begin{figure*}[H]
+\begin{minipage}{0.47\linewidth}
 
 \subcaption{\label{tbl-success-2}CSCO}
 
 \centering{
 
-\begin{tabular}{lllll}
+\begin{tabular}{lll}
 \toprule
- & statistic & parent\_cost & mean\_child\_cost & lifetime\_s\\
+statistic & parent\_cost & lifetime\_s\\
 \midrule
-0 & mean & 1.496204 & -0.109473 & 32.403243\\
-1 & min & -37.343490 & -13.824266 & 0.000000\\
-2 & 25\% & -2.495476 & -3.533627 & 9.647520\\
-3 & 50\% & 2.133194 & 0.249334 & 15.597951\\
-4 & 75\% & 5.022137 & 3.028982 & 28.053210\\
-5 & max & 27.744810 & 5.518933 & 299.878286\\
+str & f64 & f64\\
+"mean" & 1.496204 & 32.403243\\
+"std" & 4.217447 & 49.10376\\
+"50\%" & 2.133194 & 15.597951\\
 \bottomrule
 \end{tabular}
 
 }
 
-\end{figure*}
-
 \end{minipage}%
 \newline
-\begin{minipage}[t]{\linewidth}
-
-\begin{figure*}[H]
+\begin{minipage}{\linewidth}
 
 \subcaption{\label{tbl-success-3}DRH}
 
 \centering{
 
-\begin{tabular}{lllll}
+\begin{tabular}{lll}
 \toprule
- & statistic & parent\_cost & mean\_child\_cost & lifetime\_s\\
+statistic & parent\_cost & lifetime\_s\\
 \midrule
-0 & mean & 25.471640 & 10.770199 & 75.617880\\
-1 & min & -62.935586 & -92.823939 & 0.000000\\
-2 & 25\% & 0.963938 & -5.316321 & 9.051737\\
-3 & 50\% & 28.342588 & 15.368545 & 31.240362\\
-4 & 75\% & 40.402367 & 23.090175 & 115.460249\\
-5 & max & 390.002103 & 200.598420 & 299.998009\\
+str & f64 & f64\\
+"mean" & 25.47164 & 75.61788\\
+"std" & 28.592753 & 92.533696\\
+"50\%" & 28.342588 & 31.240362\\
 \bottomrule
 \end{tabular}
 
 }
-
-\end{figure*}
 
 \end{minipage}%
 
@@ -564,112 +746,135 @@ Aggression}\label{successful-strategy-hybrid-obi-calibrated-aggression}
 
 \subsection{Test Stats / Significance}\label{test-stats-significance}
 
-{
+Table~\ref{tbl-tstat} shows the average cost in bps per share, per
+ticker, using the hybrid and naive fill strategies, as well as the
+results of a two-sample T-test on per asset samples. The hybrid strategy
+shows a pronounced downward shift in cost accross assets, with
+improvements of 89\% for \texttt{AMZN}, 73\% for \texttt{CSCO}, and 55\%
+for \texttt{DRH}. Each of these results is also highly significant.
 
-\begin{longtable}[]{@{}llllll@{}}
+\begin{longtable}[]{@{}lllll@{}}
 
-\caption{\label{tbl-tstat}T-Test Significance}
+\caption{\label{tbl-tstat}T-Test on Arrival Cost per Asset}
 
 \tabularnewline
 
 \toprule\noalign{}
-& symbol & hybrid mean & naive mean & t\_stat & p\_val \\
+symbol & hybrid mean & naive mean & t\_stat & p\_val \\
+str & f64 & f64 & f64 & f64 \\
 \midrule\noalign{}
 \endhead
 \bottomrule\noalign{}
 \endlastfoot
-0 & AMZN & 0.18 & 1.59 & 35.97 & 0.0 \\
-1 & CSCO & 1.50 & 5.24 & 56.50 & 0.0 \\
-2 & DRH & 25.47 & 54.43 & 48.42 & 0.0 \\
+"AMZN" & 0.18 & 1.59 & 35.97 & 0.0 \\
+"CSCO" & 1.5 & 5.24 & 56.5 & 0.0 \\
+"DRH" & 25.47 & 54.43 & 48.42 & 0.0 \\
 
 \end{longtable}
 
-}
+\subsection{Effects of Latency and
+Replenishment}\label{effects-of-latency-and-replenishment}
 
-\subsection{Effects of Latency}\label{effects-of-latency}
+In Table~\ref{tbl-latency} and Table~\ref{tbl-replenishment} we
+demonstrate the hybrid strategy's robustness to latency and
+replenishment. Here, latency is implemented as the delay between the
+time each child order is sent vs when it enters the book, and is
+displayed in microseconds. The bps per-share cost differences between
+levels of latency are remarkably low across assets and strategies. This
+is obvious for the naive strategy as it is zero-intelligence. The hybrid
+strategy does have some reliance on latency when filling with an IOC
+order immediately before adverse moves, however the majority of fills
+are from resting limit orders filling over multiple seconds and so it
+remains robust to changes in latency.
 
-Table from ilestone showing the effect of latency on hybrid filler
+The effects of replenishment are also small but are more clear than
+latency. Across strategy and asset, a higher rate of replenishment leads
+to a slightly lower average cost and vice versa. This is simply
+calibration of the books liquidity, and demonstrates a sanity check on
+the fill results and the hybrid strategy's robustness to the value of
+hyperparameters.
 
-{
-
-\begin{longtable}[]{@{}llllll@{}}
+\begin{longtable}[]{@{}lllll@{}}
 
 \caption{\label{tbl-latency}Effects of Latency}
 
 \tabularnewline
 
 \toprule\noalign{}
-& symbol & hybrid mean & naive mean & latency (ns) & latency\_level \\
+symbol & latency\_level & hybrid mean cost & naive mean cost & latency
+(us) \\
+str & str & f64 & f64 & f64 \\
 \midrule\noalign{}
 \endhead
 \bottomrule\noalign{}
 \endlastfoot
-0 & CSCO & 4.19 & 9.76 & 10000.0 & low \\
-1 & AMZN & 1.36 & 4.30 & 10000.0 & low \\
-2 & DRH & 35.53 & 88.32 & 10000.0 & low \\
-3 & CSCO & 4.19 & 9.86 & 100000.0 & mid \\
-4 & AMZN & 1.42 & 4.17 & 100000.0 & mid \\
-5 & DRH & 35.62 & 88.36 & 100000.0 & mid \\
-6 & CSCO & 4.38 & 10.27 & 50000000.0 & high \\
-7 & AMZN & 1.35 & 4.37 & 50000000.0 & high \\
-8 & DRH & 35.64 & 88.54 & 50000000.0 & high \\
+"CSCO" & "low" & 4.19 & 9.76 & 10.0 \\
+"AMZN" & "low" & 1.36 & 4.3 & 10.0 \\
+"DRH" & "low" & 35.53 & 88.32 & 10.0 \\
+"CSCO" & "mid" & 4.19 & 9.86 & 100.0 \\
+"AMZN" & "mid" & 1.42 & 4.17 & 100.0 \\
+"DRH" & "mid" & 35.62 & 88.36 & 100.0 \\
+"CSCO" & "high" & 4.38 & 10.27 & 50000.0 \\
+"AMZN" & "high" & 1.35 & 4.37 & 50000.0 \\
+"DRH" & "high" & 35.64 & 88.54 & 50000.0 \\
 
 \end{longtable}
 
-}
-
-\subsection{Effects of Replenishment}\label{effects-of-replenishment}
-
-{
-
-\begin{longtable}[]{@{}llllll@{}}
+\begin{longtable}[]{@{}lllll@{}}
 
 \caption{\label{tbl-replenishment}Effects of Replenishment}
 
 \tabularnewline
 
 \toprule\noalign{}
-& symbol & hybrid mean & naive mean & replenishment &
-replenishment\_level \\
+symbol & replenishment\_level & hybrid mean cost & naive mean cost &
+replenishment \\
+str & str & f64 & f64 & f64 \\
 \midrule\noalign{}
 \endhead
 \bottomrule\noalign{}
 \endlastfoot
-0 & CSCO & 5.37 & 13.63 & 1.0 & low \\
-1 & AMZN & 2.03 & 6.90 & 1.0 & low \\
-2 & DRH & 42.01 & 94.80 & 1.0 & low \\
-3 & CSCO & 4.19 & 9.86 & 15.0 & mid \\
-4 & AMZN & 1.42 & 4.17 & 15.0 & mid \\
-5 & DRH & 35.62 & 88.36 & 15.0 & mid \\
-6 & CSCO & 3.89 & 8.03 & 29.0 & high \\
-7 & AMZN & 1.35 & 3.09 & 29.0 & high \\
-8 & DRH & 35.05 & 84.70 & 29.0 & high \\
+"CSCO" & "low" & 5.37 & 13.63 & 1.0 \\
+"AMZN" & "low" & 2.03 & 6.9 & 1.0 \\
+"DRH" & "low" & 42.01 & 94.8 & 1.0 \\
+"CSCO" & "mid" & 4.19 & 9.86 & 15.0 \\
+"AMZN" & "mid" & 1.42 & 4.17 & 15.0 \\
+"DRH" & "mid" & 35.62 & 88.36 & 15.0 \\
+"CSCO" & "high" & 3.89 & 8.03 & 29.0 \\
+"AMZN" & "high" & 1.35 & 3.09 & 29.0 \\
+"DRH" & "high" & 35.05 & 84.7 & 29.0 \\
 
 \end{longtable}
 
-}
-
 \subsection{Intraday Seasonality}\label{intraday-seasonality}
+
+Figure~\ref{fig-time} shows the intraday seasonality of median arrival
+cost in bps per-share, across ticker sand strategies. As expected both
+strategies, though especially the hybrid, benefit from the high volume
+on the open, and approach a mean throughout the day. Interestingly, the
+naive strategy does worst during the open for DRH. This could be a
+result of high opening spreads for the illiquid asset, which then
+stabilize to one or two ticks overtime.
 
 \begin{figure}
 
-\begin{minipage}[t]{\linewidth}
+\begin{minipage}{0.50\linewidth}
 
 \centering{
 
-\includegraphics[width=0.7\linewidth,height=\textheight,keepaspectratio]{plots_and_data/section_3/successful_run/plots/time_mid.AMZN.png}
+\pandocbounded{\includegraphics[keepaspectratio]{plots_and_data/section_3/successful_run/plots/time_mid.AMZN.png}}
 
 }
 
 \subcaption{\label{fig-time-amzn}AMZN}
 
 \end{minipage}%
-\newline
-\begin{minipage}[t]{\linewidth}
+%
+\begin{minipage}{0.50\linewidth}
 
 \centering{
 
-\includegraphics[width=0.7\linewidth,height=\textheight,keepaspectratio]{plots_and_data/section_3/successful_run/plots/time_mid.CSCO.png}
+\pandocbounded{\includegraphics[keepaspectratio]{plots_and_data/section_3/successful_run/plots/time_mid.CSCO.png}}
 
 }
 
@@ -677,11 +882,11 @@ replenishment\_level \\
 
 \end{minipage}%
 \newline
-\begin{minipage}[t]{\linewidth}
+\begin{minipage}{\linewidth}
 
 \centering{
 
-\includegraphics[width=0.7\linewidth,height=\textheight,keepaspectratio]{plots_and_data/section_3/successful_run/plots/time_mid.DRH.png}
+\includegraphics[width=0.52\linewidth,height=\textheight,keepaspectratio]{plots_and_data/section_3/successful_run/plots/time_mid.DRH.png}
 
 }
 
@@ -689,23 +894,41 @@ replenishment\_level \\
 
 \end{minipage}%
 
-\caption{\label{fig-time-of-day}Intraday Seasonality of Arrival Cost}
+\caption{\label{fig-time}Intraday Seasonality of Arrival Cost}
 
 \end{figure}%
 
-\section{Future Work}\label{future-work}
+\section{Future Work}\label{sec-future}
 
-\subsection{Smoothed OBI}\label{smoothed-obi}
+A few improvements stand out with their potential to improve upon the
+hybrid fill strategy. They are laid out below.
 
-Tried it, got some weird results (no hyperparam tuning, possibly a quirk
-of replenishment.)
+\subsection{EMA of Book Imbalance}\label{ema-of-book-imbalance}
 
-\subsection{A Catch-up/Fall-Behind
-Mechanism}\label{a-catch-upfall-behind-mechanism}
+To prevent temporary peaks in book imbalance from changin the strategy's
+aggression, the strategy ould use a moving average of book imbalance.
+This would smooth the peaky nature of OBI. HOwever, this introduces yet
+more hyperparameters and is linked with the time to expiry of resting
+limit orders.
 
-Currently waiting in-band.
+\subsection{Catch-Up Mechanism}\label{catch-up-mechanism}
 
-\subsection{Fixed horizon vs T(v)}\label{fixed-horizon-vs-tv}
+Currently, the strategy is placing naive IOC orders when OBI is not
+strongly indicating the direction of price drift, which can cause
+unnecessary price impact. This could be improved by implementing a
+mechanism to measure how ahead or behind the strategy is in its filled
+quantity and dynamically tweak the OBI thresholds or size of fills.
+
+\subsection{Horizon as a Function of
+Volume}\label{horizon-as-a-function-of-volume}
+
+Currently the hybrid strategy uses a set hyperparameter for the parent
+order's horizon to fill. This could be dynamically chosen as a function
+of the share or dollar volume in the past few minutes, indicating how
+much impact the fills are likely to have. With more volume being traded,
+the time horizon can be shorter and vice-versa.
+
+\newpage{}
 
 \section{Definitions and Appendix}\label{sec-definitions}
 
@@ -716,7 +939,7 @@ definitions. We lay them out below for reference.
 \item
   OBI: We define order book imbalnce (OBI) using the top \emph{six}
   levels of the book, as follows:
-  \begin{equation}\protect\phantomsection\label{eq-obi}{
+  \begin{equation}\phantomsection\label{eq-obi}{
   \begin{split}
   OBI = \frac{\Sigma_{i=0}^5 Q_{i}^{bid} - \Sigma_{i=0}^5 Q_{i}^{ask}}{\Sigma_{i=0}^5 [Q_{i}^{bid} + Q_{i}^{ask}]}\in [-1, 1]
   \end{split}
@@ -726,9 +949,9 @@ definitions. We lay them out below for reference.
   mechanical impact of taking liquidity from the limit order book. Below
   is a visualization of the mechanical impact for reference. Our order
   book simulation is discussed in Section~\ref{sec-sim}, and includes
-  further information on impact as well as replenishment adn latency.
+  further information on impact as well as replenishment and latency.
   \begin{center}
-  \includegraphics[width=0.7\linewidth,height=\textheight,keepaspectratio,alt={Mechanical Impact}]{plots_and_data/appendix/impact.png}
+  \includegraphics[width=0.7\linewidth,height=\textheight,keepaspectratio]{plots_and_data/appendix/impact.png}
   \end{center}
 \item
   Arrival Cost: When referring to arrival cost of a parent or child
@@ -740,12 +963,40 @@ definitions. We lay them out below for reference.
   child orders, the mean and median arrival costs are calculated across
   child orders for a given parent. Below, \(q_i\) and \(p_i\) are the
   individual fill's quantities and prices respectively.
-  \begin{equation}\protect\phantomsection\label{eq-vwap}{
+  \begin{equation}\phantomsection\label{eq-vwap}{
   \begin{split}
   p_{vwap} &= \frac{\Sigma_{i=0}^nq_i\,p_i}{\Sigma_{i=0}^nq_i}\\ 
   \text{ArrivalCost (bps)} &= \frac{p_{vwap} - p_{mid}}{p_{mid}} * 10^4
   \end{split}
   }\end{equation}
+\end{itemize}
+
+\section{References}\label{references}
+
+\begin{itemize}
+\tightlist
+\item
+  Bouchaud, J. P., Farmer, J. D., \& Lillo, F. (2009). How markets
+  slowly digest changes in supply and demand. \emph{Handbook of
+  Financial Markets}.
+\item
+  Cont, R., Kukanov, A., \& Stoikov, S. (2014). The price impact of
+  order book events. \emph{Journal of Financial Econometrics}.
+\item
+  Said, E. (2022). Market Impact: Empirical Evidence, Theory and
+  Practice. \emph{arXiv preprint}.
+\item
+  Sato, Y., \& Kanazawa, K. (2024). Online Learning of Order Flow and
+  Market Impact with Bayesian Change-Point Detection Methods.
+  \emph{arXiv preprint}.
+\item
+  Obizhaeva, A. A., \& Wang, J. (2013). Optimal trading strategy and
+  supply/demand dynamics. \emph{Journal of Financial Markets}, 16(1),
+  1--32.
+\item
+  Gârleanu, N., \& Pedersen, L. H. (2013). Dynamic trading with
+  predictable returns and transaction costs. \emph{Journal of Finance},
+  68(6), 2309--2340.
 \end{itemize}
 
 
