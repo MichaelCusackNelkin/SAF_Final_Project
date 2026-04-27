@@ -258,7 +258,7 @@ if __name__ == "__main__":
 
     # -- General/Data Params --
     LATENCY = 100 * 1e3                 #Child order latency ns
-    REPLENISHMENT = 15.0                #poisson rate of replenishment using wall-clock
+    REPLENISHMENT = 200.0               #poisson rate of replenishment using wall-clock
     PARENT_QTY = 10_000
     MAX_WORKERS = 10
     N_TRIALS = 5_000

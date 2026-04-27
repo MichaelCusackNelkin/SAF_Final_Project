@@ -1,5 +1,5 @@
 ---
-title: "Comparing the Impact and Arrival Cost of Naive and OBI-Enhanced Order Splitting Strategies"
+title: "Imbalance-Calibrated Aggression: Comparing Fill-Quality via Naive and OBI-Enhanced Meta-Order Execution Strategies"
 date: today
 date-modified: last-modified
 author:
@@ -14,7 +14,7 @@ author:
   - name: Vijeet Prasad
     email: vp2580@columbia.edu
 description: |
-  This document constitutes the authors' final project whitepaper for the Columbia Mathematics of Finance course Statistical Aspects of Finance during the Spring 2026 semester.
+  This document constitutes the authors' final project whitepaper for the Statistical Aspects of Finance course taken during the Spring 2026 semester as part of their Master's in the Mathematics of Finance at Columbia University.
 keywords: [optimal, execution, order, splitting, imbalance]
 citation:
   type: article-journal
@@ -44,18 +44,18 @@ Definitions of key terms and calculations is provided in @sec-definitions.
 # Motivation and Main Ideas
 <!-- Michael CN -->
 
-A fundamental hurdle in medium-frequency systematic trading is the balance between arrival cost and immediacy. Submitting a very large marketable order leads to significant price impact as it takes liquidity from the limit order book. On the other hand, splitting a parent order into smaller chunks over seconds or minutes exposes child fills to adverse price drifts, and when done naively also leads to significant price impact. The goal of this work is to reduce the total arrival cost of a parent order by intelligently calibrating the aggression of child orders to take advantage of favorable price movements while avoiding unfavorable ones.
+A fundamental hurdle in medium-frequency systematic trading is the balance between arrival cost and immediacy. Submitting a very large marketable order leads to significant price impact as it takes liquidity from the limit order book. On the other hand, splitting a parent order into smaller chunks over seconds or minutes exposes child fills to adverse price drifts, and when done naively also leads to significant price impact. In this work we compare the the arrival costs of different strategies from naive zero-intelligence to the dynamically adaptive, with the goal of reducing the total arrival cost of a parent order, subject to time, quantity, and price constraints. Our final implementation achieves this by intelligently calibrating the aggression of child orders to take advantage of favorable price conditions while avoiding unfavorable ones.
 
 ## Underperformance of Naive Splitting
-Unfortunately, naively splitting a parent order into $n$ chunks and filling them as market orders $\delta t$ time units apart has high impact and exposes the parent order to significant price drifts. The below example of splitting a 5000-share order into twenty-five 200-share buy fills shows the significant impact of repeatedly lifting the ask overtime. The underperformance of this strategy nessesitates a more intelligent way to split and fill large orders.
-![Naive Order Splitting](plots_and_data/section_1/naive_new.png){#fig-naive fig-align="center" width=70%}
+The main driver of this work is the unfortunate underperformance of simple execution strategies. Naively splitting a parent order into $n$ chunks and filling them as market orders $\delta t$ time units apart has high impact and exposes the parent order to significant price drifts. The below example of splitting a 5000-share buy order into twenty-five 200-share fills shows the significant impact of repeatedly lifting the ask overtime. The underperformance of this strategy nessesitates a more intelligent way to identify favorable ways to fill and split large orders.
+![Naive Order Splitting](plots_and_data/section_1/naive.png){#fig-naive fig-align="center" width=70%}
 
 ## Book Imbalance as a Primary Signal
-We chose to use the imbalance in quantity on the top six levels of the book as our signal to calibrate the aggression of our fill strategy. We made this choice because OBI is a well understood, easy to implement, and  powerful signal of price direction on the micro-milli second time scale. To explore OBI's predictive power, we used the markout plot below. Within five separate ranges of OBI values, we sample 100,000 timestamps and calculate the difference between the initial mid-price and the mid-price at 10,000 subsequent times, then average over each of the 100,000 paths. We use a time horizon of $[0,1]$ second, in tens of microseconds.
+The core of our improvements over the naive method make use of the imbalance in quantity on the top six levels of the book as a predictive signal over short horizons. Structurally, as marketable buy and sell orders arrive at approximately equal rates, imbalance in top of book depth should predict which levels are depleted fastest and therefore the direction of a subsequent price movement. We chose OBI because it is a well understood, easy to implement, and powerful signal of price direction on the micro-to-milli-second time scale. As evidence of OBI's predictive power, we used the markout plot in @fig-markout. Within five separate ranges of OBI values, we sample 100,000 timestamps and calculate the difference between the initial mid-price and the mid-price at 10,000 subsequent times, then average over each of the 100,000 paths. We use a time horizon of $[0,10]$ milliseconds, in steps of ten microseconds.
 
 ![Markout Plot](plots_and_data/section_1/markout_symlog.png){#fig-markout fig-align="center" width=70%}
 
-This plot clearly shows that OBI is a powerful, structural predictor of price direction within a few milliseconds and that this price motion is structural, indicated by the length of time that the markouts stay smooth and near-zero variance. Using this predictive power, our fill strategy can reliably predict positive and negative price drifts and take advantage of them.
+@fig-markout clearly shows that OBI is a powerful predictor of price drift within milliseconds and that this price motion is structural, indicated by the length of time that the markouts stay smooth and near-zero variance. Using OBI's predictive qualities, our fill strategy, discussed in @sec-hybrid can reliably predict positive and negative price drifts and only fill when advantageous.
 
 
 # Methodological Choices and Innovations
@@ -63,19 +63,19 @@ This plot clearly shows that OBI is a powerful, structural predictor of price di
 
 ## Sourcing Data
 
-We utilize the `MBP-10` schema from Databento, which provides the top 10 levels of the book for a selection of stocks and date range. The dataset includes all order book updates (trades, adds, cancels, etc.) which allows us to reconstruct the book at every book update. The data is sourced from [Databento](https://databento.com/docs/schemas-and-data-formats/mbp-10?historical=python&live=python&reference=python). We fetch data through a simple `DatabentoGenericAdapter` class that uses a hierarchical caching structure. This allows us to call the Databento API only for new information, which is necessary to manage storage and memory for L2 book data. The adapter caches on `[tickers, start, end, dataset, schema]`. Here, our schema is always `MBP-10` and we use the `XNAS.ITCH` Dataset which gives us full access to the Nasdaq exchange.
+Throughout this work we utilize level 2 data in the `MBP-10` schema from Databento, which provides the top 10 levels of the book for a selection of stocks and dates. The dataset samples on all order book updates (trades, adds, cancels, etc.) which allows us to reconstruct the book overtime. The data is sourced from [Databento](https://databento.com/docs/schemas-and-data-formats/mbp-10?historical=python&live=python&reference=python). We fetch data through a simple `DatabentoGenericAdapter` class that uses a hierarchical caching structure. This allows us to call the Databento API only for new data, which is necessary to manage time and storage capacity for L2 book data. The adapter caches on `[tickers, start, end, dataset, schema]`. Here, our schema is always `MBP-10` and we use the `XNAS.ITCH` Dataset which gives us full access to the Nasdaq exchange.
 
-We use L2 data for three tickers, `AMZN`, `CSCO`, and `DRH` from `"2026-03-18":"2026-04-18"`. We chose these tickers because they cover different varieties of equities. `AMZN` is a liquid small-tick stock that should offer ample resilience to price impact and relatively high and volatile bid-ask spreads. `CSCO` is a liquid large-tick stock that still has deep liquidity but larger spreads and more variability throughout the day. Finally, `DRH` is an illiquid large-tick stock that offers a challenge to minimizing costs. It cannot accept large amounts of liquidity and moves more slowly than `AMZN` and `CSCO`. Put together, this dataset is 28.7GB, on the order of RAM capacity for a sequential process but requires some management for parallel processing tasks, like the below.
+We use L2 data for three tickers, `AMZN`, `CSCO`, and `DRH` from `"2026-03-18":"2026-04-18"`. We chose these tickers because they are representative of three major varieties of equities. `AMZN` is a liquid small-tick stock that should offer ample resilience to price impact and relatively high and volatile intraday bid-ask spreads. `CSCO` is a liquid large-tick stock that still has deep liquidity but more narrow and consistent intraday spreads. Finally, `DRH` is an illiquid large-tick stock that offers a challenge to minimizing costs. It cannot accept large amounts of liquidity, moves more slowly than `AMZN` and `CSCO`. It also has more inconsistent order arrival rates, which poses a direct challenge for using OBI as a signal. All together this dataset is 28.7GB, on the order of RAM capacity for a sequential process but requires some management for parallel processing tasks, like the below.
 
 ## Simulator {#sec-sim}
 <!-- Michael CN -->
-To allow us to simulate fills using `MBP1-10` data we built an `ExecutionSimulator` class which can:
+The technical backbone of this work is the `ExecutionSimulator` class we designed to simulate fills using raw `MBP1-10` data of the book overtime. The simulator can do the following.
 
 1. Simulate the execution of market orders, resting limit orders, and immediate-or-cancel (IOC) limit orders at a given nanosecond timestamp and latency.
-2. Maintain an orderbook state over time, using L2 data from the `DatabentoGenericAdapter`, consistent with mutations of the book caused by simulated fills and the replenishment of the swept levels via a Poisson process with book-update time sampling.
-3. Simulate and track execution statistics (arrival cost, fill times, quantities, etc.) for an arbitrary execution strategy using the above order types.
+2. Maintain an orderbook state over time, using level two `MBP-10` data from Databento, consistent with mutations of the book caused by simulated fills and the replenishment of swept levels via a Poisson process with book-update sampling.
+3. Calculate and track execution statistics (arrival cost, fill times, quantities, etc.) for any arbitrary execution strategy using the above order types.
 
-Our implementation of the `ExecutionSimulator` class initiates the L2 book with a `polars` dataframe in Databento's `MBP-10` schema. The simulator maintains the book using internally consistent `numpy` arrays, which it updates as the book mutates via simulated fills. At the end of a simulation it returns a new `polars` dataframe representing the mutated book over time (sampled at book-update events). After each simulated order is filled (mainly child orders) the simulator returns a dictionary of the form below. Note from @sec-definitions that `arrival_cost` is calculated as the `vwap` minus the mid price at execution.
+Our implementation of the `ExecutionSimulator` class initiates the L2 book with a `polars` dataframe in Databento's `MBP-10` schema. The simulator maintains the book using internally consistent `numpy` arrays, which it updates as the book mutates via simulated fills. After each simulated order is filled (mainly child orders) the simulator returns a dictionary of the form below. Note from @sec-definitions that `arrival_cost` is calculated as the `vwap` minus the mid price at execution. At the end of a simulation it returns a new `polars` dataframe representing the mutated book over time (sampled at book-update events) as well as a list of individual fill results.
 ```{python}
 #| output: false
 {'vwap': 211.9365352112676,
@@ -83,23 +83,22 @@ Our implementation of the `ExecutionSimulator` class initiates the L2 book with 
  'total_filled': 710,
  'levels_swept': 1,
  'executed_at_ns': 1774538471626080001,
- 'executed_at_idx': 4078073,
  'arrival_cost': 0.02153521126757596}
 ```
 
-At each update of the book (sampled from the true data) the book also replenishes any levels swept by simulated fills. To accomplish this it uses a Poisson process to determine the rate of replenishment. When a replenishment occurs at a given level, that level is refilled with a 100 share order for the price the level was previously swept at.
+At each the timestamp of each book update the simulator also replenishes any levels swept by simulated fills. After each marketable order execution, the simulator draws a limit order quantity $q_i$ for each price tick $p_i$ between the best ask and best bid, using a Poisson distribution at rate $\lambda$ (set as a hyperparameter). If any $q_i>0$, then a limit order is added with quantity $q_i$ at price level $p_i$.
 
 ## Strategy Evaluation
 To evaluate each of the following strategies, we utilize a parallel processing trial workflow. At initialization, we set the numerous required hyperparameters, each listed below. 
 
-- `Latency = 100us`, `Poisson Replenishment = 15.0`, `PARENT_QTY = 10_000`, `MAX_WORKERS = 10`, `N_TRIALS = 5_000`, `SEED = 12345`, `HORIZON = 300s`
+- `Latency`: 100us, `Poisson Replenishment`: 100.0, `PARENT_QTY`: 10_000, `MAX_WORKERS`: 10, `N_TRIALS`: 5_000, `SEED`: 12345, `HORIZON`: 300s
 
-Then we scan the full dataset's parquet cache and split into one `.parquet` for each ticker. We then randomly sample `N_TRIALS = 5_000` initial timestamps from the L2 dataset, ensuring that no two windows from the initial timestamp plus `HORIZON = 300s` seconds overlap more than a few seconds. Then for each combination of ticker and fill strategy, we initialize `MAX_WORKERS = 10` CPU workers and scan the relavent ticker `.parquet` file for each window and run the fill strategy on that window only, randomly choosing the side of the order from `['BUY', 'SELL']`. This workflow balances memory requirements and parallelized processing speed, which brought down the time cost of running trials half an hour per trial sequentially over the full dataset to 5000 trials in a few minutes (depending on the ticker).
+To load data while managin memory we scan the full dataset's cache and split into one `.parquet` for each ticker. We then randomly sample `N_TRIALS` initial timestamps from the book, ensuring that no two windows from the initial timestamp through the `HORIZON` overlap more than a few seconds. Then for each combination of asset and fill strategy, we initialize `MAX_WORKERS` CPU workers and scan the relavent ticker `.parquet` file for each window and run the fill strategy on that window only, randomly sampling the side of the order from `['BUY', 'SELL']`. This workflow balances memory requirements and parallelized processing speed. Compared with the sequential workflow used in the milestone report, this brought down the time cost from half an hour per trial over the full dataset to a few seconds per trial over a selected window.
 
-To measure the performance of each fill strategy, we save information including `side`, `parent_filled`, `parent_arrival_cost`, `mean_child_arrival_cost`, `median_child_arrival_cost`,  and `parent_lifetime`. Below we compare our final successful strategy with the naive strategy using the above metrics, and go over some failed strategies and their associated learnings along the way. More on specific definitions of the above metrics can be found in @sec-definitions.
+To measure the performance of each fill strategy, we save information including `side`, `parent_filled`, `parent_arrival_cost`, `mean_child_arrival_cost`, `median_child_arrival_cost`,  and `parent_lifetime`. Below we compare our final successful strategy with the naive strategy using the above metrics, and go over some failed innovations and their associated learnings along the way. More on specific definitions of the above metrics can be found in @sec-definitions.
 
 ## Naive Benchmark
-As discussed and plotted earlier, we are comparing our stragies with the naive method of splitting orders into `N_CHUNKS = 50`, and filling them a fixed time interval `WAIT_TIME = 1s` apart using regular market orders. Below in @tbl-naive are some performance metrics for this naive method to serve as a benchmark we are competing against.
+As discussed and plotted earlier, we are comparing our stragies with the naive method of splitting orders into `N_CHUNKS = 50`, and filling them a fixed time interval `WAIT_TIME = 1s` apart using regular market orders. @tbl-naive shows some performance metrics for this naive method filling ten-thousand shares of `CSCO` to serve as a benchmark we are competing against.
 
 ```{python}
 #| echo: false
@@ -151,7 +150,7 @@ result.filter(pl.col("statistic").is_in(['mean', 'min', '25%', '50%', '75%', 'ma
 
 
 ## Failure: Naive with IOC
-The first pass attempt to improve on the benchmark is simply running the same strategy using marketable IOC limit orders instead of market orders. Results below in @tbl-naive-ioc. We used the `DEPTH_LMT = "09"` parameter to set the limit price of each child order to the 10th level of the ask (bid) for a parent buy (sell) order at the initial time of execution. This resulted in better fills, however it almost never completed hte full parent order given it's simple cap on the allowed execution price.
+The first pass attempt to improve on the benchmark is simply running the same strategy using marketable IOC limit orders instead of market orders. Results below in @tbl-naive-ioc. We set the limit price of each child order to the 10th level of the ask (bid) for a parent buy (sell) order at the initial time of execution. This resulted in better fills, however it almost never completed the full parent order given its simple cap on the allowed execution price.
 
 ```{python}
 #|echo: false
@@ -178,7 +177,7 @@ This strategy had a few issues. Firstly, for some time horizons, OBI infrequentl
 
 The aggressive-only OBI logic originated from a way of thinking rooted in alpha generation and the predict returns to be exploited by taking an aggressive position. But returns are exactly *not* what an execution strategy is focused on: simply put, to take advantage of alpha a strategy must enter and exit a position, but an execution strategy is *given* a predetermined order to place and its task is to minimize the cost filling the order's quantity over a set time horizon. Solving the second issue via this change of perspective lead directly to our improvement via a hybrid strategy.
 
-## Final Strategy: Hybrid OBI Calibrated Aggression
+## Final Strategy: Imbalance Calibrated Aggression {#sec-hybrid}
 <!-- Michael CN -->
 After escaping the alpha generation line of thinking, we were able to develop a much more effective fill strategy. It is a hybrid of the naive and OBI strategies that uses OBI to calibrate the aggressiveness or urgency of fills. For a parenty order of quantity $q$ logic is as follows:
 
@@ -196,17 +195,17 @@ By calibrating the aggression of child orders and allowing the price to drift, t
 
 # Empirical Findings
 <!-- Michael B -->
-@tbl-success shows some descriptive statistics of the results of the hybrid fill strategy, by asset. The parent costs are measured in bps per share. These results are derived from running the strategy across assets for 5000 timestamps, latency of `100us`, replenishment rate of $15$, a time horizon of $5$ minutes, and splitting a 10,000 share parent order into $n=50$ child orders each with quantity $q=200$ with OBI thresholds of $\pm 0.10$. 
+@tbl-success shows some descriptive statistics of the results of the hybrid fill strategy, by asset, and @tbl-tstat in @sec-tstat shows the means of the naive and hybrid strategies alongside significance. Parent costs are measured in bps per share. These results are derived from running the strategy across assets for 5000 timestamps, latency of `100us`, replenishment rate of $\lambda = 15$ (which is quite low), a time horizon of $5$ minutes, and splitting a 10,000 share parent order into $n=50$ child orders each with quantity $q=200$ with OBI thresholds of $\pm 0.10$. 
 
-The average parent order's total cost, defined in @sec-definitions, is highly dependent on the liquidity of each stock, with `DRH` and `CSCO` fills being respectively 141x and 9x times more costly than `AMZN` on average. This is likely the result of illiquidity causing child orders to have higher mechanical price impact, and methods to improve this are considered in @sec-future. The order lifetimes are relatively consistent at approximately thirty seconds for the liquid stocks, and above a minute for illiquid. All hybrid fills were completed withing the 5 minute horizon. @fig-hist shows histograms of the total parent cost per asset. Here it is visually obvious that the naive method has a heavy right tail, while the hybrid strategy has a mean shift downward and heavy left tail.
+The average parent order's total cost, defined in @sec-definitions, is highly dependent on the liquidity of each stock, with `DRH` and `CSCO` fills being respectively 141x and 9x times more costly than `AMZN` on average. This is likely the result of illiquidity causing child orders to have higher mechanical price impact, and methods to improve this are considered in @sec-future. The order lifetimes are relatively consistent at approximately thirty seconds for the liquid stocks, and above a minute for illiquid. All hybrid fills were completed withing the 5 minute horizon. @fig-hist shows histograms of the total parent cost per asset. Here it is visually obvious that the naive method has a heavy right tail, while the hybrid strategy has a mean shift downward and heavy left tail. It's ability to deliver these results with such a low replenishment rate simulating small sub-100-share limit order replenishment is impressive.
 
 ::: {#fig-hist layout-ncol=3}
 
-![AMZN](plots_and_data/section_3/successful_run/plots/parent_cost_mid.AMZN.png){#fig-hybrid fig-align="center" width=100%}
+![AMZN](plots_and_data/section_3/successful_run/plots/parent_cost_mid.AMZN.png){#fig-hybrid}
 
-![CSCO](plots_and_data/section_3/successful_run/plots/parent_cost_mid.CSCO.png){#fig-hybrid fig-align="center" width=100%}
+![CSCO](plots_and_data/section_3/successful_run/plots/parent_cost_mid.CSCO.png){#fig-hybrid}
 
-![DRH](plots_and_data/section_3/successful_run/plots/parent_cost_mid.DRH.png){#fig-hybrid fig-align="center" width=100%}
+![DRH](plots_and_data/section_3/successful_run/plots/parent_cost_mid.DRH.png){#fig-hybrid}
 
 Total Parent Cost Comparison
 :::
@@ -281,8 +280,8 @@ result = (
 display(result.filter(pl.col("statistic").is_in(['mean', 'std', '50%'])))
 ```
 
-## Test Stats / Significance
-@tbl-tstat shows the average cost in bps per share, per ticker, using the hybrid and naive fill strategies, as well as the results of a two-sample T-test on per asset samples. The hybrid strategy shows a pronounced downward shift in cost accross assets, with improvements of 89% for `AMZN`, 73% for `CSCO`, and 55% for `DRH`. Each of these results is also highly significant.
+## Test Stats / Significance {#sec-tstat}
+@tbl-tstat shows the average cost in bps per share, per ticker, using the hybrid and naive fill strategies, as well as the results of a two-sample T-test sampled per asset. The hybrid strategy shows a pronounced downward shift in cost accross assets, with improvements of 89% for `AMZN`, 73% for `CSCO`, and 55% for `DRH`. Each of these results is also highly significant. In this case, the t-statistics are likely robust since the results of the two strategies are not tightly coupled together by any dependencies; the hybrid fills only favorably and takes a longer horizon, the naive fills aggressively regardless of price and is more effected by price and replenishment conditions.
 ```{python}
 #| echo: false
 #| tbl-cap: "T-Test on Arrival Cost per Asset"
@@ -322,9 +321,9 @@ df
 ```
 
 ## Effects of Latency and Replenishment
-In @tbl-latency and @tbl-replenishment we demonstrate the hybrid strategy's robustness to latency and replenishment. Here, latency is implemented as the delay between the time each child order is sent vs when it enters the book, and is displayed in microseconds. The bps per-share cost differences between levels of latency are remarkably low across assets and strategies. This is obvious for the naive strategy as it is zero-intelligence. The hybrid strategy does have some reliance on latency when filling with an IOC order immediately before adverse moves, however the majority of fills are from resting limit orders filling over multiple seconds and so it remains robust to changes in latency.
+In @tbl-latency and @tbl-replenishment we demonstrate the hybrid strategy's robustness to latency and replenishment. Here, latency is implemented as the delay between the time each child order is sent and when it enters the book, and is displayed in microseconds. The bps per-share cost differences between levels of latency are remarkably low across assets and strategies. This is obvious for the naive strategy as it is zero-intelligence. The hybrid strategy does have some reliance on latency when filling with an IOC order immediately before adverse moves, however the majority of fills are from resting limit orders filling over multiple seconds and so it remains robust to changes in latency, even up to fifty milliseconds.
 
-The effects of replenishment are also small but are more clear than latency. Across strategy and asset, a higher rate of replenishment leads to a slightly lower average cost and vice versa. This is simply calibration of the books liquidity, and demonstrates a sanity check on the fill results and the hybrid strategy's robustness to the value of hyperparameters.
+The effects of low replenishment are also small but are more clear than latency, while both strategies benefit heavily from a high rate of replenishment. Across strategy and asset, a higher rate $\lambda=200$ leads to a lower average cost and vice versa. This is simply calibration of the book's liquidity, and demonstrates a sanity check on the fill results.
 
 ```{python}
 #| echo: false
@@ -379,9 +378,9 @@ hybrid_paths = [
   ("mid/1a9db328aaf8382791779f4075474cee.parquet", "CSCO", "mid"),
   ("mid/204b0a2f144401b56ae861cbac7ec2a6.parquet", "AMZN", "mid"),
   ("mid/9a484a1ba943b069d31bbc4aeb70b1a7.parquet", "DRH", "mid"),
-  ("high/7d4a20358146ccd196c803b3ce6457b7.parquet", "CSCO", "high"),
-  ("high/f63705aff422d1ddcff2de13cfc8929e.parquet", "AMZN", "high"),
-  ("high/6c8044c9d680d3a7f5b0b372f5bb6fa7.parquet", "DRH", "high")
+  ("high/c8134ff0e116cc570bcc21ec46194337.parquet", "CSCO", "high"),
+  ("high/4746a6dce4fb2d8312c49fabf0e30093.parquet", "AMZN", "high"),
+  ("high/e02b0cbb075331ffc48692aa45f3bb68.parquet", "DRH", "high")
 ]
 data = []
 for p, ticker, level in hybrid_paths:
@@ -403,7 +402,7 @@ df
 ```
 
 ## Intraday Seasonality
-@fig-time shows the intraday seasonality of median arrival cost in bps per-share, across ticker sand strategies. As expected both strategies, though especially the hybrid, benefit from the high volume on the open, and approach a mean throughout the day. Interestingly, the naive strategy does worst during the open for DRH. This could be a result of high opening spreads for the illiquid asset, which then stabilize to one or two ticks overtime.
+@fig-time shows the intraday seasonality of median arrival cost in bps per-share, across ticker sand strategies. As expected both strategies, though especially the hybrid, benefit from the high volume on the open, and approach a mean throughout the day. Interestingly, the naive strategy does worst at the open for DRH. This is likely a result of both high opening spreads and low top book depth on open for the illiquid asset, which then stabilize overtime. This effect is demonstrated in [Lecture 8](https://saf.jeremyshen.com/notes/lecture/lec8.html#basic-trading-slangs).
 
 ::: {#fig-time layout="[[1,1], [1]]"}
 
@@ -418,10 +417,10 @@ Intraday Seasonality of Arrival Cost
 
 # Future Work {#sec-future}
 <!-- Debby -->
-A few improvements stand out with their potential to improve upon the hybrid fill strategy. They are laid out below.
+A few improvements stand out in their potential to improve upon the hybrid fill strategy. They are laid out below.
 
 ## EMA of Book Imbalance
-To prevent temporary peaks in book imbalance from changin the strategy's aggression, the strategy ould use a moving average of book imbalance. This would smooth the peaky nature of OBI. HOwever, this introduces yet more hyperparameters and is linked with the time to expiry of resting limit orders.
+To prevent temporary peaks in book imbalance from affecting the strategy's aggression, the strategy ould use a moving average of book imbalance. This would smooth the peaky nature of OBI. HOwever, this introduces yet more hyperparameters and is linked with the time to expiry of resting limit orders.
 
 ## Catch-Up Mechanism
 Currently, the strategy is placing naive IOC orders when OBI is not strongly indicating the direction of price drift, which can cause unnecessary price impact. This could be improved by implementing a mechanism to measure how ahead or behind the strategy is in its filled quantity and dynamically tweak the OBI thresholds or size of fills.
@@ -429,7 +428,8 @@ Currently, the strategy is placing naive IOC orders when OBI is not strongly ind
 ## Horizon as a Function of Volume
 Currently the hybrid strategy uses a set hyperparameter for the parent order's horizon to fill. This could be dynamically chosen as a function of the share or dollar volume in the past few minutes, indicating how much impact the fills are likely to have. With more volume being traded, the time horizon can be shorter and vice-versa.
 
-{{< pagebreak >}}
+## Improving Book Simulation
+Calibrating hyper parameters like the poisson rate of replenishment and latency would help achieve more accurate results. Access to proprietary trading data would also inform the choice of distribution for limit order replenishment and sizes, as a Poisson distribution is a simple approximation.
 
 
 # Definitions and Appendix {#sec-definitions}
@@ -439,12 +439,14 @@ Throughout this work we refer to a few concepts that require specific definition
 - OBI: We define order book imbalnce (OBI) using the top *six* levels of the book, as follows:
 $$
 \begin{split}
-OBI = \frac{\Sigma_{i=0}^5 Q_{i}^{bid} - \Sigma_{i=0}^5 Q_{i}^{ask}}{\Sigma_{i=0}^5 [Q_{i}^{bid} + Q_{i}^{ask}]}\in [-1, 1]
+OBI = \frac{\Sigma_{i=0}^5 [Q_{i}^{bid} - Q_{i}^{ask}]}{\Sigma_{i=0}^5 [Q_{i}^{bid} + Q_{i}^{ask}]}\in [-1, 1]
 \end{split}
 $$ {#eq-obi}
 
 - Price Impact : When referring to price impact we inlcude only the mechanical impact of taking liquidity from the limit order book. Below is a visualization of the mechanical impact for reference. Our order book simulation is discussed in @sec-sim, and includes further information on impact as well as replenishment and latency.
-![Mechanical Impact](plots_and_data/appendix/impact.png){#fig-impact fig-align="center" width=70%}
+
+![Mechanical Impact](plots_and_data/appendix/impact.png){#fig-impact fig-align="center" width=50%}
+
 - Arrival Cost: When referring to arrival cost of a parent or child order, we are referring to the volume-weighted average price of a fill minus the mid price at the time of execution, divided by mid price and converted to bps. For a parent order, the VWAP sums over child order's individual vwaps in the same way, and the mid price is set to the price at the time the parent order sent to the execution engine. For child orders, the mean and median arrival costs are calculated across child orders for a given parent. Below, $q_i$ and $p_i$ are the individual fill's quantities and prices respectively.
 $$
 \begin{split}

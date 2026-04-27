@@ -12,7 +12,7 @@
   "n_chunks": 50,
   "n_trials": 5000,
   "parent_qty": 10000,
-  "replenishment": 29.0,
+  "replenishment": 200.0,
   "seed": 12345,
   "start": "2026-03-18",
   "ticker": "AMZN",
