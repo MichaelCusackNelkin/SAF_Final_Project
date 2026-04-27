@@ -1,3 +1,7 @@
+# OS/editor files
+.DS_Store
+Thumbs.db
+
 # Large Data files
 data/
 **/data/
@@ -85,6 +89,32 @@ target/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+*.quarto_ipynb*
+
+# Quarto execution/render byproducts
+.quarto/
+_freeze/
+*_files/
+*_cache/
+/_extensions/
+
+# LaTeX/TikZ intermediates
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.lot
+*.nav
+*.out
+*.run.xml
+*.snm
+*.synctex.gz
+*.toc
+*.vrb
+tikz*.pdf
 
 # IPython
 profile_default/

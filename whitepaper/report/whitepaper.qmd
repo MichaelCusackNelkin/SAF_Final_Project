@@ -212,6 +212,7 @@ This strategy had a few issues. Firstly, calibrating the parameters above was di
 ## Successful Strategy: Hybrid OBI Calibrated Aggression
 <!-- Michael CN -->
 ![Hybrid Plot](plots_and_data/section_3/successful_run/hybrid.png){#fig-hybrid fig-align="center" width=70%}
+{{< pagebreak >}}
 
 ```{python}
 #| echo: false
