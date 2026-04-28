@@ -207,7 +207,7 @@
 \IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
 \urlstyle{same}
 \hypersetup{
-  pdftitle={Imbalance-Calibrated Aggression: Comparing Fill-Quality via Naive and OBI-Enhanced Meta-Order Execution Strategies},
+  pdftitle={Book Imbalance Strategies Lead to Robust Execution Improvements Over Naive Benchmark},
   pdfauthor={Michael Cusack-Nelkin; Alick Zhou; Debby Zhao; Michael Bakshandeh; Vijeet Prasad},
   pdfkeywords={optimal, execution, order, splitting, imbalance},
   colorlinks=true,
@@ -219,8 +219,8 @@
 
 
 
-\title{Imbalance-Calibrated Aggression: Comparing Fill-Quality via Naive
-and OBI-Enhanced Meta-Order Execution Strategies}
+\title{Book Imbalance Strategies Lead to Robust Execution Improvements
+Over Naive Benchmark}
 \author{
 \textbf{Michael Cusack-Nelkin}%
 \\%
@@ -246,43 +246,43 @@ and OBI-Enhanced Meta-Order Execution Strategies}
 \begin{document}
 \maketitle
 \begin{abstract}
-problem (naive fills = bad) -\textgreater{} goals (use OBI to improve
-things) -\textgreater{} methods (obi informs aggression) -\textgreater{}
-results -\textgreater{} significance (?) Definitions of key terms and
-calculations is provided in Section~\ref{sec-definitions}.
+A fundamental challenge in medium-frequency systematic trading is the
+underperformance of simple execution strategies. Naively splitting a
+parent order into smaller market-orders over seconds or minutes exposes
+child fills to adverse price drifts, and can also lead to large price
+impact. In this work we compare the arrival cost of different order
+splitting and execution strategies from the naive zero-intelligence to
+the dynamically adaptive, with the goal of reducing the total arrival
+cost of a parent order, subject to time, quantity, and price
+constraints. To do this, we use level two orderbook data sourced from
+Databento, and build an order book simulation capable of simulating the
+fills and price impact of any arbitrary execution strategy using common
+ordertypes. We examine three failed execution strategies and their
+individual advancements and issues. We showcase our final
+implementation, which achieves robust cost reductions of 55\% - 89\%, by
+intelligently calibrating the aggression of child orders to take
+advantage of favorable price conditions while avoiding unfavorable ones.
+We then examine this strategies mechanics, results and statistical
+significance for three assets and for ranges of latency and book
+replenishment parameters. Finally, we suggest further tweaks and
+improvements to the strategy, to be pursued in the future.
 \end{abstract}
 
 
 \section{Motivation and Main Ideas}\label{motivation-and-main-ideas}
-
-A fundamental hurdle in medium-frequency systematic trading is the
-balance between arrival cost and immediacy. Submitting a very large
-marketable order leads to significant price impact as it takes liquidity
-from the limit order book. On the other hand, splitting a parent order
-into smaller chunks over seconds or minutes exposes child fills to
-adverse price drifts, and when done naively also leads to significant
-price impact. In this work we compare the the arrival costs of different
-strategies from naive zero-intelligence to the dynamically adaptive,
-with the goal of reducing the total arrival cost of a parent order,
-subject to time, quantity, and price constraints. Our final
-implementation achieves this by intelligently calibrating the aggression
-of child orders to take advantage of favorable price conditions while
-avoiding unfavorable ones.
 
 \subsection{Underperformance of Naive
 Splitting}\label{underperformance-of-naive-splitting}
 
 The main driver of this work is the unfortunate underperformance of
 simple execution strategies. Naively splitting a parent order into \(n\)
-chunks and filling them as market orders \(\delta t\) time units apart
+chunks and filling them as market orders \(\Delta t\) time units apart
 has high impact and exposes the parent order to significant price
-drifts. The below example of splitting a 5000-share buy order into
-twenty-five 200-share fills shows the significant impact of repeatedly
-lifting the ask overtime. The underperformance of this strategy
-nessesitates a more intelligent way to identify favorable ways to fill
-and split large orders. \begin{center}
-\includegraphics[width=0.7\linewidth,height=\textheight,keepaspectratio]{plots_and_data/section_1/naive.png}
-\end{center}
+drifts. Figure~\ref{fig-naive} shows the price impact ofrepeatedly
+lifting the ask overtime. This simulated fill split a 5000-share buy
+order into twenty-five 200-share fills. The underperformance of this
+strategy nessesitates a more intelligent way to identify favorable ways
+to fill and split large orders.
 
 \subsection{Book Imbalance as a Primary
 Signal}\label{book-imbalance-as-a-primary-signal}
@@ -304,13 +304,37 @@ steps of ten microseconds.
 
 \begin{figure}
 
+\begin{minipage}{0.50\linewidth}
+
+\begin{figure}[H]
+
 \centering{
 
-\includegraphics[width=0.7\linewidth,height=\textheight,keepaspectratio]{plots_and_data/section_1/markout_symlog.png}
+\pandocbounded{\includegraphics[keepaspectratio]{plots_and_data/section_1/naive.png}}
+
+}
+
+\caption{\label{fig-naive}Naive Order Splitting}
+
+\end{figure}%
+
+\end{minipage}%
+%
+\begin{minipage}{0.50\linewidth}
+
+\begin{figure}[H]
+
+\centering{
+
+\pandocbounded{\includegraphics[keepaspectratio]{plots_and_data/section_1/markout_symlog.png}}
 
 }
 
 \caption{\label{fig-markout}Markout Plot}
+
+\end{figure}%
+
+\end{minipage}%
 
 \end{figure}%
 
@@ -391,18 +415,7 @@ below. Note from Section~\ref{sec-definitions} that
 price at execution. At the end of a simulation it returns a new
 \texttt{polars} dataframe representing the mutated book over time
 (sampled at book-update events) as well as a list of individual fill
-results.
-
-\begin{Shaded}
-\begin{Highlighting}[]
-\NormalTok{\{}\StringTok{\textquotesingle{}vwap\textquotesingle{}}\NormalTok{: }\FloatTok{211.9365352112676}\NormalTok{,}
- \StringTok{\textquotesingle{}fills\textquotesingle{}}\NormalTok{: [(}\FloatTok{211.93}\NormalTok{, }\DecValTok{246}\NormalTok{), (}\FloatTok{211.94}\NormalTok{, }\DecValTok{464}\NormalTok{)],}
- \StringTok{\textquotesingle{}total\_filled\textquotesingle{}}\NormalTok{: }\DecValTok{710}\NormalTok{,}
- \StringTok{\textquotesingle{}levels\_swept\textquotesingle{}}\NormalTok{: }\DecValTok{1}\NormalTok{,}
- \StringTok{\textquotesingle{}executed\_at\_ns\textquotesingle{}}\NormalTok{: }\DecValTok{1774538471626080001}\NormalTok{,}
- \StringTok{\textquotesingle{}arrival\_cost\textquotesingle{}}\NormalTok{: }\FloatTok{0.02153521126757596}\NormalTok{\}}
-\end{Highlighting}
-\end{Shaded}
+results described in Section~\ref{sec-definitions}.
 
 At each the timestamp of each book update the simulator also replenishes
 any levels swept by simulated fills. After each marketable order
@@ -427,7 +440,7 @@ required hyperparameters, each listed below.
   300s
 \end{itemize}
 
-To load data while managin memory we scan the full dataset's cache and
+To load data while managing memory we scan the full dataset's cache and
 split into one \texttt{.parquet} for each ticker. We then randomly
 sample \texttt{N\_TRIALS} initial timestamps from the book, ensuring
 that no two windows from the initial timestamp through the
@@ -533,7 +546,7 @@ times. Figure~\ref{fig-obi} shows this strategy in action.
 
 \centering{
 
-\includegraphics[width=0.7\linewidth,height=\textheight,keepaspectratio]{plots_and_data/section_2/failed_runs/obi_aggressive.png}
+\includegraphics[width=0.8\linewidth,height=\textheight,keepaspectratio]{plots_and_data/section_2/failed_runs/obi_aggressive.png}
 
 }
 
@@ -575,8 +588,8 @@ follows:
   Set positive and negative OBI thresholds for expected price moves that
   are calibrated using the markout plots above.
 \item
-  For a buy order, depending on the value of OBI, do the following
-  (oppsite for a sell):
+  For a buy order, depending on the value of OBI, do the following (or
+  oppsite for a sell):
 \end{enumerate}
 
 \begin{itemize}
@@ -611,7 +624,7 @@ marked ``unfavorable''. This is positive and expected behavior.
 
 \centering{
 
-\includegraphics[width=0.7\linewidth,height=\textheight,keepaspectratio]{plots_and_data/section_3/successful_run/hybrid.png}
+\pandocbounded{\includegraphics[keepaspectratio]{plots_and_data/section_3/successful_run/hybrid.png}}
 
 }
 
@@ -624,12 +637,13 @@ marked ``unfavorable''. This is positive and expected behavior.
 Table~\ref{tbl-success} shows some descriptive statistics of the results
 of the hybrid fill strategy, by asset, and Table~\ref{tbl-tstat} in
 Section~\ref{sec-tstat} shows the means of the naive and hybrid
-strategies alongside significance. Parent costs are measured in bps per
-share. These results are derived from running the strategy across assets
-for 5000 timestamps, latency of \texttt{100us}, replenishment rate of
-\(\lambda = 15\) (which is quite low), a time horizon of \(5\) minutes,
-and splitting a 10,000 share parent order into \(n=50\) child orders
-each with quantity \(q=200\) with OBI thresholds of \(\pm 0.10\).
+strategies alongside their statistical significance demonstrated by a
+t-test. Parent costs are measured in bps per share. These results are
+derived from running the strategy across assets for 5000 timestamps,
+latency of \texttt{100us}, replenishment rate of \(\lambda = 15\) (which
+is quite low), a time horizon of \(5\) minutes, and splitting a 10,000
+share parent order into \(n=50\) child orders each with quantity
+\(q=200\) with OBI thresholds of \(\pm 0.10\).
 
 The average parent order's total cost, defined in
 Section~\ref{sec-definitions}, is highly dependent on the liquidity of
@@ -799,22 +813,22 @@ Replenishment}\label{effects-of-latency-and-replenishment}
 
 In Table~\ref{tbl-latency} and Table~\ref{tbl-replenishment} we
 demonstrate the hybrid strategy's robustness to latency and
-replenishment. Here, latency is implemented as the delay between the
-time each child order is sent and when it enters the book, and is
-displayed in microseconds. The bps per-share cost differences between
-levels of latency are remarkably low across assets and strategies. This
-is obvious for the naive strategy as it is zero-intelligence. The hybrid
-strategy does have some reliance on latency when filling with an IOC
-order immediately before adverse moves, however the majority of fills
-are from resting limit orders filling over multiple seconds and so it
-remains robust to changes in latency, even up to fifty milliseconds.
+replenishment. Here, latency is implemented as a delay between the time
+each child order is sent and when it enters the book, and is displayed
+in microseconds. The bps per-share cost differences between levels of
+latency are remarkably low across assets and strategies. This is obvious
+for the naive strategy as it is zero-intelligence. The hybrid strategy
+does have some reliance on latency when filling with an IOC order
+immediately before adverse moves, however the majority of fills are from
+resting limit orders filling over multiple seconds and so it remains
+robust to changes in latency, even up to fifty milliseconds.
 
 The effects of low replenishment are also small but are more clear than
 latency, while both strategies benefit heavily from a high rate of
 replenishment. Across strategy and asset, a higher rate \(\lambda=200\)
-leads to a lower average cost and vice versa. This is simply calibration
-of the book's liquidity, and demonstrates a sanity check on the fill
-results.
+leads to a lower price impact and thus lower average costs. This is
+simply calibration of the book's liquidity, and demonstrates a sanity
+check on the fill results.
 
 \begin{longtable}[]{@{}lllll@{}}
 
@@ -925,8 +939,9 @@ demonstrated in
 
 \section{Future Work}\label{sec-future}
 
-A few improvements stand out in their potential to improve upon the
-hybrid fill strategy. They are laid out below.
+Overall, the imbalance calibrated aggression strateyg is a highly
+effective one. As always though, a few tweaks stand out in their
+potential to improve upon these results. Each is laid out below.
 
 \subsection{EMA of Book Imbalance}\label{ema-of-book-imbalance}
 
@@ -955,11 +970,13 @@ the time horizon can be shorter and vice-versa.
 
 \subsection{Improving Book Simulation}\label{improving-book-simulation}
 
-Calibrating hyper parameters like the poisson rate of replenishment and
-latency would help achieve more accurate results. Access to proprietary
-trading data would also inform the choice of distribution for limit
-order replenishment and sizes, as a Poisson distribution is a simple
-approximation.
+Calibrating hyper parameters like the poisson rate of replenishment
+would help achieve more accurate results. Access to proprietary trading
+data would also inform the choice of distribution for limit order
+replenishment and sizes, as a Poisson distribution is a relatively
+simple approximation.
+
+\newpage{}
 
 \section{Definitions and Appendix}\label{sec-definitions}
 
@@ -981,22 +998,6 @@ definitions. We lay them out below for reference.
   is a visualization of the mechanical impact for reference. Our order
   book simulation is discussed in Section~\ref{sec-sim}, and includes
   further information on impact as well as replenishment and latency.
-\end{itemize}
-
-\begin{figure}
-
-\centering{
-
-\includegraphics[width=0.5\linewidth,height=\textheight,keepaspectratio]{plots_and_data/appendix/impact.png}
-
-}
-
-\caption{\label{fig-impact}Mechanical Impact}
-
-\end{figure}%
-
-\begin{itemize}
-\tightlist
 \item
   Arrival Cost: When referring to arrival cost of a parent or child
   order, we are referring to the volume-weighted average price of a fill
@@ -1014,6 +1015,20 @@ definitions. We lay them out below for reference.
   \end{split}
   }\end{equation}
 \end{itemize}
+
+Discussed in Section~\ref{sec-sim}, each simulated individual fill
+returns a dictionary of fill statistics, below.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{\{}\StringTok{\textquotesingle{}vwap\textquotesingle{}}\NormalTok{: }\FloatTok{211.9365352112676}\NormalTok{,}
+ \StringTok{\textquotesingle{}fills\textquotesingle{}}\NormalTok{: [(}\FloatTok{211.93}\NormalTok{, }\DecValTok{246}\NormalTok{), (}\FloatTok{211.94}\NormalTok{, }\DecValTok{464}\NormalTok{)],}
+ \StringTok{\textquotesingle{}total\_filled\textquotesingle{}}\NormalTok{: }\DecValTok{710}\NormalTok{,}
+ \StringTok{\textquotesingle{}levels\_swept\textquotesingle{}}\NormalTok{: }\DecValTok{1}\NormalTok{,}
+ \StringTok{\textquotesingle{}executed\_at\_ns\textquotesingle{}}\NormalTok{: }\DecValTok{1774538471626080001}\NormalTok{,}
+ \StringTok{\textquotesingle{}arrival\_cost\textquotesingle{}}\NormalTok{: }\FloatTok{0.02153521126757596}\NormalTok{\}}
+\end{Highlighting}
+\end{Shaded}
 
 \section{References}\label{references}
 
